@@ -1,5 +1,56 @@
 import { createSignal, onMount, For, createEffect, Show, onCleanup } from 'solid-js';
 import type { Message } from '@clawchat/shared';
+import hljs from 'highlight.js/lib/core';
+import javascript from 'highlight.js/lib/languages/javascript';
+import typescript from 'highlight.js/lib/languages/typescript';
+import python from 'highlight.js/lib/languages/python';
+import bash from 'highlight.js/lib/languages/bash';
+import json from 'highlight.js/lib/languages/json';
+import css from 'highlight.js/lib/languages/css';
+import xml from 'highlight.js/lib/languages/xml';
+import 'highlight.js/styles/github-dark.css';
+
+hljs.registerLanguage('javascript', javascript);
+hljs.registerLanguage('js', javascript);
+hljs.registerLanguage('typescript', typescript);
+hljs.registerLanguage('ts', typescript);
+hljs.registerLanguage('python', python);
+hljs.registerLanguage('py', python);
+hljs.registerLanguage('bash', bash);
+hljs.registerLanguage('sh', bash);
+hljs.registerLanguage('json', json);
+hljs.registerLanguage('css', css);
+hljs.registerLanguage('html', xml);
+hljs.registerLanguage('xml', xml);
+
+function CodeBlock(props: { lang: string; code: string }) {
+  const [copied, setCopied] = createSignal(false);
+
+  const highlighted = () => {
+    if (props.lang && hljs.getLanguage(props.lang)) {
+      return hljs.highlight(props.code, { language: props.lang }).value;
+    }
+    return hljs.highlightAuto(props.code).value;
+  };
+
+  const copy = async () => {
+    await navigator.clipboard.writeText(props.code);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  return (
+    <div class="code-block">
+      <div class="code-header">
+        <span class="code-lang">{props.lang || 'code'}</span>
+        <button class="code-copy" onClick={copy}>
+          {copied() ? 'Copied!' : 'Copy'}
+        </button>
+      </div>
+      <pre><code innerHTML={highlighted()} /></pre>
+    </div>
+  );
+}
 
 function AudioPlayer(props: { src: string; filename?: string }) {
   const [playing, setPlaying] = createSignal(false);
@@ -90,6 +141,7 @@ export default function App() {
 
   let messagesContainer: HTMLDivElement | undefined;
   let fileInput: HTMLInputElement | undefined;
+  let textareaRef: HTMLTextAreaElement | undefined;
   let mediaRecorder: MediaRecorder | null = null;
   let recordingInterval: number | null = null;
 
@@ -139,6 +191,7 @@ export default function App() {
     setInput('');
     setFile(null);
     setUploading(true);
+    if (textareaRef) textareaRef.style.height = 'auto';
 
     try {
       if (currentFile) {
@@ -171,6 +224,41 @@ export default function App() {
 
   const isImage = (mimetype: string) => mimetype.startsWith('image/');
   const isAudio = (mimetype: string) => mimetype.startsWith('audio/');
+
+  const linkify = (text: string) => {
+    const urlRegex = /(https?:\/\/[^\s]+)/g;
+    const parts = text.split(urlRegex);
+    return parts.map((part) =>
+      urlRegex.test(part)
+        ? <a href={part} target="_blank" rel="noopener noreferrer" class="message-link">{part}</a>
+        : part
+    );
+  };
+
+  const renderContent = (text: string) => {
+    const codeBlockRegex = /```(\w*)\n?([\s\S]*?)```/g;
+    const parts: (string | { lang: string; code: string })[] = [];
+    let lastIndex = 0;
+    let match;
+
+    while ((match = codeBlockRegex.exec(text)) !== null) {
+      if (match.index > lastIndex) {
+        parts.push(text.slice(lastIndex, match.index));
+      }
+      parts.push({ lang: match[1] || '', code: match[2].trim() });
+      lastIndex = match.index + match[0].length;
+    }
+
+    if (lastIndex < text.length) {
+      parts.push(text.slice(lastIndex));
+    }
+
+    return parts.map((part) =>
+      typeof part === 'string'
+        ? linkify(part)
+        : <CodeBlock lang={part.lang} code={part.code} />
+    );
+  };
 
   const startRecording = async () => {
     try {
@@ -284,17 +372,20 @@ export default function App() {
         .messages {
           flex: 1;
           overflow-y: auto;
+          overflow-x: hidden;
           padding: 16px;
           display: flex;
           flex-direction: column;
           gap: 8px;
           background: #fafafa;
+          scrollbar-color: #ccc #fafafa;
         }
 
         .message {
           display: flex;
           flex-direction: column;
-          max-width: 85%;
+          max-width: 95%;
+          min-width: 0;
           animation: fadeIn 0.2s ease-out;
         }
 
@@ -314,11 +405,14 @@ export default function App() {
         }
 
         .bubble {
-          padding: 10px 14px;
+          padding: 12px 16px;
           border-radius: 18px;
           font-size: 15px;
           line-height: 1.4;
           word-wrap: break-word;
+          overflow: hidden;
+          min-width: 0;
+          white-space: pre-wrap;
         }
 
         .message.user .bubble {
@@ -339,6 +433,72 @@ export default function App() {
           border-radius: 12px;
           margin-top: 8px;
           display: block;
+        }
+
+        .message-link {
+          color: inherit;
+          text-decoration: underline;
+          word-break: break-all;
+        }
+
+        .message-link:hover {
+          opacity: 0.8;
+        }
+
+        .code-block {
+          margin-top: 8px;
+          border-radius: 8px;
+          background: #1e1e1e;
+          overflow: hidden;
+          min-width: 200px;
+        }
+
+        .code-header {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          padding: 6px 12px;
+          background: #333;
+        }
+
+        .code-lang {
+          font-size: 11px;
+          color: #888;
+          text-transform: uppercase;
+          letter-spacing: 0.5px;
+        }
+
+        .code-copy {
+          padding: 4px 10px;
+          background: #555;
+          border: none;
+          border-radius: 4px;
+          color: #ddd;
+          font-size: 11px;
+          cursor: pointer;
+          transition: background 0.2s;
+        }
+
+        .code-copy:hover {
+          background: #666;
+        }
+
+        .code-block pre {
+          margin: 0;
+          padding: 12px;
+          font-family: 'SF Mono', Monaco, Consolas, 'Courier New', monospace;
+          font-size: 13px;
+          line-height: 1.5;
+          white-space: pre-wrap;
+          word-break: break-all;
+          overflow-x: auto;
+          color: #d4d4d4;
+        }
+
+        .code-block code {
+          font-family: inherit;
+          background: transparent !important;
+          color: inherit;
         }
 
         .bubble .file-attachment {
@@ -453,7 +613,7 @@ export default function App() {
           border: 1px solid #e0e0e0;
         }
 
-        .input-pill input[type="text"] {
+        .input-pill textarea {
           flex: 1;
           min-width: 0;
           padding: 12px 16px;
@@ -461,9 +621,15 @@ export default function App() {
           background: #fff;
           font-size: 16px;
           outline: none;
+          resize: none;
+          font-family: inherit;
+          line-height: 1.4;
+          max-height: 120px;
+          overflow-y: auto;
+          scrollbar-color: #ccc #fff;
         }
 
-        .input-pill input[type="text"]::placeholder {
+        .input-pill textarea::placeholder {
           color: #999;
         }
 
@@ -706,6 +872,7 @@ export default function App() {
           }
           .messages {
             background: #1a1a1a;
+            scrollbar-color: #444 #1a1a1a;
           }
           .message.agent .bubble {
             background: #333;
@@ -719,11 +886,12 @@ export default function App() {
           .input-pill {
             border-color: #444;
           }
-          .input-pill input[type="text"] {
+          .input-pill textarea {
             background: #333;
             color: #fff;
+            scrollbar-color: #555 #333;
           }
-          .input-pill input[type="text"]::placeholder {
+          .input-pill textarea::placeholder {
             color: #666;
           }
           .attach-btn,
@@ -762,7 +930,7 @@ export default function App() {
               {(msg) => (
                 <div class={`message ${msg.role}`}>
                   <div class="bubble">
-                    <Show when={msg.content}>{msg.content}</Show>
+                    <Show when={msg.content}>{renderContent(msg.content)}</Show>
                     <Show when={msg.attachment}>
                       {(att) => (
                         <Show
@@ -846,12 +1014,22 @@ export default function App() {
               🎤
             </button>
             <div class="input-pill">
-              <input
-                type="text"
+              <textarea
+                ref={textareaRef}
                 value={input()}
-                onInput={(e) => setInput(e.currentTarget.value)}
-                onKeyDown={(e) => e.key === 'Enter' && !uploading() && send()}
+                onInput={(e) => {
+                  setInput(e.currentTarget.value);
+                  e.currentTarget.style.height = 'auto';
+                  e.currentTarget.style.height = Math.min(e.currentTarget.scrollHeight, 120) + 'px';
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && !e.shiftKey && !uploading()) {
+                    e.preventDefault();
+                    send();
+                  }
+                }}
                 placeholder="Type a message..."
+                rows="1"
               />
               <button class="send-btn" onClick={() => send()} disabled={uploading()}>
                 {uploading() ? '…' : '➤'}

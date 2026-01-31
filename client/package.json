@@ -9,6 +9,7 @@
   },
   "dependencies": {
     "@clawchat/shared": "workspace:*",
+    "highlight.js": "^11.9.0",
     "solid-js": "^1.8.15"
   },
   "devDependencies": {
