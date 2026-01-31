@@ -1,12 +1,20 @@
-import { createSignal, onMount, For } from 'solid-js';
+import { createSignal, onMount, For, createEffect } from 'solid-js';
 import type { Message } from '@clawchat/shared';
 
 export default function App() {
   const [messages, setMessages] = createSignal<Message[]>([]);
   const [input, setInput] = createSignal('');
+  let messagesContainer: HTMLDivElement | undefined;
+
+  // Auto-scroll to bottom when new messages arrive
+  createEffect(() => {
+    messages();
+    if (messagesContainer) {
+      messagesContainer.scrollTop = messagesContainer.scrollHeight;
+    }
+  });
 
   onMount(async () => {
-    // Load existing messages
     try {
       const res = await fetch('/api/messages');
       if (res.ok) {
@@ -16,7 +24,6 @@ export default function App() {
       console.error('Failed to load messages:', e);
     }
 
-    // Subscribe to new messages with auto-reconnect
     function connectSSE() {
       const events = new EventSource('/api/events');
       events.onmessage = (e) => {
@@ -44,61 +51,246 @@ export default function App() {
     });
   };
 
+  const formatTime = (iso: string) => {
+    const date = new Date(iso);
+    return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  };
+
   return (
-    <main style={{
-      "max-width": "600px",
-      margin: "0 auto",
-      padding: "1rem",
-      "font-family": "system-ui, sans-serif"
-    }}>
-      <h1>ClawChat</h1>
+    <>
+      <style>{`
+        * {
+          box-sizing: border-box;
+          margin: 0;
+          padding: 0;
+        }
 
-      <div style={{
-        border: "1px solid #ccc",
-        "border-radius": "8px",
-        height: "400px",
-        "overflow-y": "auto",
-        padding: "1rem",
-        "margin-bottom": "1rem"
-      }}>
-        <For each={messages()}>
-          {(msg) => (
-            <div style={{
-              "margin-bottom": "0.5rem",
-              "text-align": msg.role === 'user' ? 'right' : 'left'
-            }}>
-              <span style={{
-                display: "inline-block",
-                padding: "0.5rem 1rem",
-                "border-radius": "1rem",
-                background: msg.role === 'user' ? '#007bff' : '#e9ecef',
-                color: msg.role === 'user' ? 'white' : 'black'
-              }}>
-                {msg.content}
-              </span>
-            </div>
+        html, body, #root {
+          height: 100%;
+          overflow: hidden;
+        }
+
+        body {
+          font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+          background: #f5f5f5;
+          color: #1a1a1a;
+          -webkit-font-smoothing: antialiased;
+        }
+
+        .app {
+          display: flex;
+          flex-direction: column;
+          height: 100%;
+          max-width: 768px;
+          margin: 0 auto;
+          background: #fff;
+          box-shadow: 0 0 20px rgba(0,0,0,0.1);
+        }
+
+        .header {
+          padding: 16px 20px;
+          background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+          color: white;
+          font-weight: 600;
+          font-size: 18px;
+          flex-shrink: 0;
+          display: flex;
+          align-items: center;
+          gap: 10px;
+        }
+
+        .header::before {
+          content: '';
+          width: 10px;
+          height: 10px;
+          background: #4ade80;
+          border-radius: 50%;
+          box-shadow: 0 0 6px #4ade80;
+        }
+
+        .messages {
+          flex: 1;
+          overflow-y: auto;
+          padding: 16px;
+          display: flex;
+          flex-direction: column;
+          gap: 8px;
+          background: #fafafa;
+        }
+
+        .message {
+          display: flex;
+          flex-direction: column;
+          max-width: 85%;
+          animation: fadeIn 0.2s ease-out;
+        }
+
+        @keyframes fadeIn {
+          from { opacity: 0; transform: translateY(8px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
+
+        .message.user {
+          align-self: flex-end;
+          align-items: flex-end;
+        }
+
+        .message.agent {
+          align-self: flex-start;
+          align-items: flex-start;
+        }
+
+        .bubble {
+          padding: 10px 14px;
+          border-radius: 18px;
+          font-size: 15px;
+          line-height: 1.4;
+          word-wrap: break-word;
+        }
+
+        .message.user .bubble {
+          background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+          color: white;
+          border-bottom-right-radius: 4px;
+        }
+
+        .message.agent .bubble {
+          background: #fff;
+          color: #1a1a1a;
+          border: 1px solid #e5e5e5;
+          border-bottom-left-radius: 4px;
+        }
+
+        .time {
+          font-size: 11px;
+          color: #999;
+          margin-top: 4px;
+          padding: 0 4px;
+        }
+
+        .input-area {
+          padding: 12px 16px;
+          background: #fff;
+          border-top: 1px solid #eee;
+          display: flex;
+          gap: 10px;
+          flex-shrink: 0;
+        }
+
+        .input-area input {
+          flex: 1;
+          padding: 12px 16px;
+          border: 1px solid #e0e0e0;
+          border-radius: 24px;
+          font-size: 16px;
+          outline: none;
+          transition: border-color 0.2s, box-shadow 0.2s;
+        }
+
+        .input-area input:focus {
+          border-color: #667eea;
+          box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+
+        .input-area button {
+          padding: 12px 20px;
+          background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+          color: white;
+          border: none;
+          border-radius: 24px;
+          font-size: 15px;
+          font-weight: 600;
+          cursor: pointer;
+          transition: transform 0.1s, box-shadow 0.2s;
+        }
+
+        .input-area button:active {
+          transform: scale(0.96);
+        }
+
+        .input-area button:hover {
+          box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+        }
+
+        .empty {
+          flex: 1;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          color: #999;
+          font-size: 15px;
+        }
+
+        @media (max-width: 768px) {
+          .app {
+            max-width: 100%;
+            box-shadow: none;
+          }
+        }
+
+        @media (prefers-color-scheme: dark) {
+          body {
+            background: #1a1a1a;
+            color: #fff;
+          }
+          .app {
+            background: #242424;
+          }
+          .messages {
+            background: #1a1a1a;
+          }
+          .message.agent .bubble {
+            background: #333;
+            color: #fff;
+            border-color: #444;
+          }
+          .input-area {
+            background: #242424;
+            border-top-color: #333;
+          }
+          .input-area input {
+            background: #333;
+            border-color: #444;
+            color: #fff;
+          }
+          .input-area input::placeholder {
+            color: #888;
+          }
+          .time {
+            color: #666;
+          }
+        }
+      `}</style>
+
+      <div class="app">
+        <header class="header">ClawChat</header>
+
+        <div class="messages" ref={messagesContainer}>
+          {messages().length === 0 ? (
+            <div class="empty">No messages yet</div>
+          ) : (
+            <For each={messages()}>
+              {(msg) => (
+                <div class={`message ${msg.role}`}>
+                  <div class="bubble">{msg.content}</div>
+                  <span class="time">{formatTime(msg.createdAt)}</span>
+                </div>
+              )}
+            </For>
           )}
-        </For>
-      </div>
+        </div>
 
-      <div style={{ display: "flex", gap: "0.5rem" }}>
-        <input
-          type="text"
-          value={input()}
-          onInput={(e) => setInput(e.currentTarget.value)}
-          onKeyDown={(e) => e.key === 'Enter' && send()}
-          placeholder="Type a message..."
-          style={{
-            flex: 1,
-            padding: "0.5rem",
-            "border-radius": "4px",
-            border: "1px solid #ccc"
-          }}
-        />
-        <button onClick={() => send()} style={{ padding: "0.5rem 1rem" }}>
-          Send
-        </button>
+        <div class="input-area">
+          <input
+            type="text"
+            value={input()}
+            onInput={(e) => setInput(e.currentTarget.value)}
+            onKeyDown={(e) => e.key === 'Enter' && send()}
+            placeholder="Type a message..."
+          />
+          <button onClick={() => send()}>Send</button>
+        </div>
       </div>
-    </main>
+    </>
   );
 }
