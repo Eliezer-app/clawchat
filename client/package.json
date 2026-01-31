@@ -1,0 +1,19 @@
+{
+  "name": "@clawchat/client",
+  "version": "0.0.1",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@clawchat/shared": "workspace:*",
+    "solid-js": "^1.8.15"
+  },
+  "devDependencies": {
+    "vite": "^5.1.0",
+    "vite-plugin-solid": "^2.10.0",
+    "typescript": "^5.3.3"
+  }
+}

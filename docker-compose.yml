@@ -1,0 +1,25 @@
+services:
+  server:
+    image: node:20-alpine
+    working_dir: /app/server
+    command: sh -c "corepack enable && pnpm install && pnpm dev"
+    ports:
+      - "3100:3100"
+    volumes:
+      - .:/app
+      - node_modules:/app/node_modules
+
+  client:
+    image: node:20-alpine
+    working_dir: /app/client
+    command: sh -c "corepack enable && pnpm install && pnpm dev --host"
+    ports:
+      - "3101:3101"
+    volumes:
+      - .:/app
+      - node_modules:/app/node_modules
+    depends_on:
+      - server
+
+volumes:
+  node_modules:
