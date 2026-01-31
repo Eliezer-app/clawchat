@@ -1,9 +1,31 @@
 import express from 'express';
+import multer from 'multer';
+import path from 'path';
+import fs from 'fs';
 import { getMessages, addMessage } from './db.js';
-import type { Message } from '@clawchat/shared';
+import type { Message, Attachment } from '@clawchat/shared';
 
 const agentPort = process.env.AGENT_PORT || 3100;
 const publicPort = process.env.PUBLIC_PORT || 3101;
+const uploadsDir = process.env.UPLOADS_DIR || path.join(process.cwd(), 'data', 'uploads');
+
+// Ensure uploads directory exists
+fs.mkdirSync(uploadsDir, { recursive: true });
+
+// Configure multer for file uploads
+const storage = multer.diskStorage({
+  destination: uploadsDir,
+  filename: (req, file, cb) => {
+    const id = crypto.randomUUID();
+    const ext = path.extname(file.originalname);
+    cb(null, `${id}${ext}`);
+  },
+});
+
+const upload = multer({
+  storage,
+  limits: { fileSize: 100 * 1024 * 1024 }, // 100MB
+});
 
 // Shared state
 const sseClients: Set<express.Response> = new Set();
@@ -19,12 +41,13 @@ setInterval(() => {
 }, 30000);
 
 // Helper to create and broadcast a message
-function createMessage(role: Message['role'], content: string): Message {
+function createMessage(role: Message['role'], content: string, attachment?: Attachment): Message {
   const message = addMessage({
     id: crypto.randomUUID(),
     conversationId: 'default',
     role,
     content: content.trim(),
+    attachment,
     createdAt: new Date().toISOString(),
   });
   broadcast({ type: 'message', message });
@@ -57,6 +80,9 @@ agentApp.get('/health', (req, res) => {
 const publicApp = express();
 publicApp.use(express.json());
 
+// Serve uploaded files
+publicApp.use('/api/files', express.static(uploadsDir));
+
 // TODO: Add auth middleware here
 
 publicApp.get('/api/events', (req, res) => {
@@ -80,6 +106,30 @@ publicApp.post('/api/messages', (req, res) => {
     return;
   }
   const message = createMessage('user', content);
+  res.json(message);
+});
+
+// File upload endpoint
+publicApp.post('/api/upload', upload.single('file'), (req, res) => {
+  const file = req.file;
+  const content = (req.body.content as string) || '';
+
+  if (!file && !content.trim()) {
+    res.status(400).json({ error: 'File or content required' });
+    return;
+  }
+
+  let attachment: Attachment | undefined;
+  if (file) {
+    attachment = {
+      id: path.basename(file.filename, path.extname(file.filename)),
+      filename: file.originalname,
+      mimetype: file.mimetype,
+      size: file.size,
+    };
+  }
+
+  const message = createMessage('user', content, attachment);
   res.json(message);
 });
 

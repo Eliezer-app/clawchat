@@ -1,10 +1,30 @@
-import { createSignal, onMount, For, createEffect } from 'solid-js';
+import { createSignal, onMount, For, createEffect, Show } from 'solid-js';
 import type { Message } from '@clawchat/shared';
 
 export default function App() {
   const [messages, setMessages] = createSignal<Message[]>([]);
   const [input, setInput] = createSignal('');
+  const [file, setFile] = createSignal<File | null>(null);
+  const [uploading, setUploading] = createSignal(false);
+  const [recording, setRecording] = createSignal(false);
+  const [recordingDuration, setRecordingDuration] = createSignal(0);
+  const [lightbox, setLightbox] = createSignal<{ src: string; filename: string } | null>(null);
+
+  const openLightbox = (src: string, filename: string) => {
+    setLightbox({ src, filename });
+    history.pushState({ lightbox: true }, '');
+  };
+
+  const closeLightbox = () => {
+    if (lightbox()) {
+      setLightbox(null);
+    }
+  };
+
   let messagesContainer: HTMLDivElement | undefined;
+  let fileInput: HTMLInputElement | undefined;
+  let mediaRecorder: MediaRecorder | null = null;
+  let recordingInterval: number | null = null;
 
   // Auto-scroll to bottom when new messages arrive
   createEffect(() => {
@@ -15,6 +35,9 @@ export default function App() {
   });
 
   onMount(async () => {
+    // Handle Android back button
+    window.addEventListener('popstate', () => closeLightbox());
+
     try {
       const res = await fetch('/api/messages');
       if (res.ok) {
@@ -42,18 +65,101 @@ export default function App() {
 
   const send = async () => {
     const content = input().trim();
-    if (!content) return;
+    const currentFile = file();
+
+    if (!content && !currentFile) return;
+
     setInput('');
-    await fetch('/api/messages', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ content }),
-    });
+    setFile(null);
+    setUploading(true);
+
+    try {
+      if (currentFile) {
+        const formData = new FormData();
+        formData.append('file', currentFile);
+        formData.append('content', content);
+        await fetch('/api/upload', { method: 'POST', body: formData });
+      } else {
+        await fetch('/api/messages', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ content }),
+        });
+      }
+    } finally {
+      setUploading(false);
+    }
   };
 
   const formatTime = (iso: string) => {
     const date = new Date(iso);
     return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  };
+
+  const formatSize = (bytes: number) => {
+    if (bytes < 1024) return `${bytes} B`;
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  };
+
+  const isImage = (mimetype: string) => mimetype.startsWith('image/');
+  const isAudio = (mimetype: string) => mimetype.startsWith('audio/');
+
+  const startRecording = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const chunks: Blob[] = [];
+      mediaRecorder = new MediaRecorder(stream, { mimeType: 'audio/webm' });
+
+      mediaRecorder.ondataavailable = (e) => {
+        if (e.data.size > 0) chunks.push(e.data);
+      };
+
+      mediaRecorder.onstop = () => {
+        stream.getTracks().forEach(track => track.stop());
+        const blob = new Blob(chunks, { type: 'audio/webm' });
+        const voiceFile = new File([blob], `voice-${Date.now()}.webm`, { type: 'audio/webm' });
+        setFile(voiceFile);
+        if (recordingInterval) clearInterval(recordingInterval);
+        setRecordingDuration(0);
+      };
+
+      mediaRecorder.start();
+      setRecording(true);
+      setRecordingDuration(0);
+      recordingInterval = setInterval(() => setRecordingDuration(d => d + 1), 1000) as unknown as number;
+    } catch (e) {
+      console.error('Failed to start recording:', e);
+    }
+  };
+
+  const stopRecording = () => {
+    if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+      mediaRecorder.stop();
+      setRecording(false);
+    }
+  };
+
+  const formatDuration = (seconds: number) => {
+    const m = Math.floor(seconds / 60);
+    const s = seconds % 60;
+    return `${m}:${s.toString().padStart(2, '0')}`;
+  };
+
+  const getFileUrl = (msg: Message) => {
+    if (!msg.attachment) return '';
+    const ext = msg.attachment.filename.split('.').pop() || '';
+    return `/api/files/${msg.attachment.id}.${ext}`;
+  };
+
+  const downloadFile = async (url: string, filename: string) => {
+    const res = await fetch(url);
+    const blob = await res.blob();
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = filename;
+    a.click();
+    URL.revokeObjectURL(a.href);
   };
 
   return (
@@ -161,6 +267,49 @@ export default function App() {
           border-bottom-left-radius: 4px;
         }
 
+        .bubble img {
+          max-width: 100%;
+          border-radius: 12px;
+          margin-top: 8px;
+          display: block;
+        }
+
+        .bubble .file-attachment {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          padding: 8px 12px;
+          background: rgba(0,0,0,0.1);
+          border-radius: 8px;
+          margin-top: 8px;
+          text-decoration: none;
+          color: inherit;
+        }
+
+        .message.user .bubble .file-attachment {
+          background: rgba(255,255,255,0.2);
+        }
+
+        .file-icon {
+          font-size: 24px;
+        }
+
+        .file-info {
+          display: flex;
+          flex-direction: column;
+          gap: 2px;
+        }
+
+        .file-name {
+          font-weight: 500;
+          font-size: 14px;
+        }
+
+        .file-size {
+          font-size: 12px;
+          opacity: 0.7;
+        }
+
         .time {
           font-size: 11px;
           color: #999;
@@ -173,11 +322,60 @@ export default function App() {
           background: #fff;
           border-top: 1px solid #eee;
           display: flex;
+          flex-direction: column;
           gap: 10px;
           flex-shrink: 0;
         }
 
-        .input-area input {
+        .file-preview {
+          display: flex;
+          align-items: center;
+          gap: 10px;
+          padding: 8px 12px;
+          background: #f0f0f0;
+          border-radius: 8px;
+        }
+
+        .file-preview img {
+          width: 40px;
+          height: 40px;
+          object-fit: cover;
+          border-radius: 4px;
+        }
+
+        .file-preview-info {
+          flex: 1;
+          overflow: hidden;
+        }
+
+        .file-preview-name {
+          font-size: 14px;
+          font-weight: 500;
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
+        }
+
+        .file-preview-size {
+          font-size: 12px;
+          color: #666;
+        }
+
+        .file-preview-remove {
+          padding: 4px 8px;
+          background: none;
+          border: none;
+          color: #666;
+          cursor: pointer;
+          font-size: 18px;
+        }
+
+        .input-row {
+          display: flex;
+          gap: 10px;
+        }
+
+        .input-area input[type="text"] {
           flex: 1;
           padding: 12px 16px;
           border: 1px solid #e0e0e0;
@@ -187,12 +385,118 @@ export default function App() {
           transition: border-color 0.2s, box-shadow 0.2s;
         }
 
-        .input-area input:focus {
+        .input-area input[type="text"]:focus {
           border-color: #667eea;
           box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
         }
 
-        .input-area button {
+        .input-area input[type="file"] {
+          display: none;
+        }
+
+        .attach-btn {
+          padding: 12px;
+          background: #f0f0f0;
+          border: none;
+          border-radius: 50%;
+          cursor: pointer;
+          font-size: 20px;
+          transition: background 0.2s;
+        }
+
+        .attach-btn:hover {
+          background: #e0e0e0;
+        }
+
+        .mic-btn {
+          padding: 12px;
+          background: #f0f0f0;
+          border: none;
+          border-radius: 50%;
+          cursor: pointer;
+          font-size: 20px;
+          transition: background 0.2s, transform 0.1s;
+        }
+
+        .mic-btn:hover {
+          background: #e0e0e0;
+        }
+
+        .mic-btn.recording {
+          background: #ef4444;
+          animation: pulse 1s infinite;
+        }
+
+        @keyframes pulse {
+          0%, 100% { transform: scale(1); }
+          50% { transform: scale(1.1); }
+        }
+
+        .recording-indicator {
+          display: flex;
+          align-items: center;
+          gap: 10px;
+          padding: 8px 12px;
+          background: #fef2f2;
+          border-radius: 8px;
+          color: #dc2626;
+          font-size: 14px;
+        }
+
+        .recording-dot {
+          width: 10px;
+          height: 10px;
+          background: #ef4444;
+          border-radius: 50%;
+          animation: blink 1s infinite;
+        }
+
+        @keyframes blink {
+          0%, 100% { opacity: 1; }
+          50% { opacity: 0.3; }
+        }
+
+        .stop-btn {
+          margin-left: auto;
+          padding: 6px 12px;
+          background: #dc2626;
+          color: white;
+          border: none;
+          border-radius: 16px;
+          font-size: 13px;
+          font-weight: 600;
+          cursor: pointer;
+        }
+
+        .stop-btn:hover {
+          background: #b91c1c;
+        }
+
+        .voice-message {
+          display: flex;
+          align-items: center;
+          gap: 10px;
+          min-width: 180px;
+          padding: 4px 0;
+        }
+
+        .voice-message::before {
+          content: '🎤';
+          font-size: 18px;
+          opacity: 0.8;
+        }
+
+        .voice-message audio {
+          width: 100%;
+          height: 32px;
+          border-radius: 16px;
+        }
+
+        .message.user .voice-message audio {
+          filter: invert(1) hue-rotate(180deg);
+        }
+
+        .send-btn {
           padding: 12px 20px;
           background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
           color: white;
@@ -204,11 +508,16 @@ export default function App() {
           transition: transform 0.1s, box-shadow 0.2s;
         }
 
-        .input-area button:active {
+        .send-btn:disabled {
+          opacity: 0.6;
+          cursor: not-allowed;
+        }
+
+        .send-btn:not(:disabled):active {
           transform: scale(0.96);
         }
 
-        .input-area button:hover {
+        .send-btn:not(:disabled):hover {
           box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
         }
 
@@ -226,6 +535,45 @@ export default function App() {
             max-width: 100%;
             box-shadow: none;
           }
+        }
+
+        .lightbox {
+          position: fixed;
+          inset: 0;
+          background: #000;
+          z-index: 1000;
+          animation: fadeIn 0.2s ease-out;
+        }
+
+        .lightbox img {
+          width: 100%;
+          height: 100%;
+          object-fit: contain;
+        }
+
+        .lightbox-buttons {
+          position: absolute;
+          bottom: 24px;
+          left: 50%;
+          transform: translateX(-50%);
+          display: flex;
+          gap: 12px;
+        }
+
+        .lightbox-buttons button {
+          padding: 12px 24px;
+          background: rgba(0, 0, 0, 0.5);
+          backdrop-filter: blur(8px);
+          border: none;
+          border-radius: 24px;
+          color: white;
+          font-size: 15px;
+          font-weight: 600;
+          cursor: pointer;
+        }
+
+        .lightbox-buttons button:active {
+          opacity: 0.8;
         }
 
         @media (prefers-color-scheme: dark) {
@@ -248,16 +596,40 @@ export default function App() {
             background: #242424;
             border-top-color: #333;
           }
-          .input-area input {
+          .input-area input[type="text"] {
             background: #333;
             border-color: #444;
             color: #fff;
           }
-          .input-area input::placeholder {
+          .input-area input[type="text"]::placeholder {
             color: #888;
+          }
+          .attach-btn {
+            background: #333;
+            color: #fff;
+          }
+          .attach-btn:hover {
+            background: #444;
+          }
+          .file-preview {
+            background: #333;
+          }
+          .file-preview-remove {
+            color: #999;
           }
           .time {
             color: #666;
+          }
+          .mic-btn {
+            background: #333;
+            color: #fff;
+          }
+          .mic-btn:hover {
+            background: #444;
+          }
+          .recording-indicator {
+            background: #3f1e1e;
+            color: #fca5a5;
           }
         }
       `}</style>
@@ -272,7 +644,41 @@ export default function App() {
             <For each={messages()}>
               {(msg) => (
                 <div class={`message ${msg.role}`}>
-                  <div class="bubble">{msg.content}</div>
+                  <div class="bubble">
+                    <Show when={msg.content}>{msg.content}</Show>
+                    <Show when={msg.attachment}>
+                      {(att) => (
+                        <Show
+                          when={isImage(att().mimetype)}
+                          fallback={
+                            <Show
+                              when={isAudio(att().mimetype)}
+                              fallback={
+                                <a class="file-attachment" href={getFileUrl(msg)} target="_blank" rel="noopener">
+                                  <span class="file-icon">📎</span>
+                                  <div class="file-info">
+                                    <span class="file-name">{att().filename}</span>
+                                    <span class="file-size">{formatSize(att().size)}</span>
+                                  </div>
+                                </a>
+                              }
+                            >
+                              <div class="voice-message">
+                                <audio controls src={getFileUrl(msg)} preload="metadata" />
+                              </div>
+                            </Show>
+                          }
+                        >
+                          <img
+                            src={getFileUrl(msg)}
+                            alt={att().filename}
+                            onClick={() => openLightbox(getFileUrl(msg), att().filename)}
+                            style={{ cursor: 'pointer' }}
+                          />
+                        </Show>
+                      )}
+                    </Show>
+                  </div>
                   <span class="time">{formatTime(msg.createdAt)}</span>
                 </div>
               )}
@@ -281,16 +687,74 @@ export default function App() {
         </div>
 
         <div class="input-area">
-          <input
-            type="text"
-            value={input()}
-            onInput={(e) => setInput(e.currentTarget.value)}
-            onKeyDown={(e) => e.key === 'Enter' && send()}
-            placeholder="Type a message..."
-          />
-          <button onClick={() => send()}>Send</button>
+          <Show when={file()}>
+            {(f) => (
+              <div class="file-preview">
+                <Show
+                  when={f().type.startsWith('image/')}
+                  fallback={
+                    <Show when={f().type.startsWith('audio/')} fallback={<span class="file-icon">📎</span>}>
+                      <span class="file-icon">🎤</span>
+                    </Show>
+                  }
+                >
+                  <img src={URL.createObjectURL(f())} alt="Preview" />
+                </Show>
+                <div class="file-preview-info">
+                  <div class="file-preview-name">{f().name}</div>
+                  <div class="file-preview-size">{formatSize(f().size)}</div>
+                </div>
+                <button class="file-preview-remove" onClick={() => setFile(null)}>×</button>
+              </div>
+            )}
+          </Show>
+          <Show when={recording()}>
+            <div class="recording-indicator">
+              <span class="recording-dot" />
+              <span>Recording {formatDuration(recordingDuration())}</span>
+              <button class="stop-btn" onClick={stopRecording}>Stop</button>
+            </div>
+          </Show>
+          <div class="input-row">
+            <button class="attach-btn" onClick={() => fileInput?.click()}>📎</button>
+            <input
+              ref={fileInput}
+              type="file"
+              accept="image/*,.pdf,.doc,.docx,.txt,audio/*"
+              onChange={(e) => setFile(e.currentTarget.files?.[0] || null)}
+            />
+            <button
+              class="mic-btn"
+              classList={{ recording: recording() }}
+              onClick={() => recording() ? stopRecording() : startRecording()}
+            >
+              🎤
+            </button>
+            <input
+              type="text"
+              value={input()}
+              onInput={(e) => setInput(e.currentTarget.value)}
+              onKeyDown={(e) => e.key === 'Enter' && !uploading() && send()}
+              placeholder="Type a message..."
+            />
+            <button class="send-btn" onClick={() => send()} disabled={uploading()}>
+              {uploading() ? '...' : 'Send'}
+            </button>
+          </div>
         </div>
       </div>
+
+      <Show when={lightbox()}>
+        {(lb) => (
+          <div class="lightbox" onClick={() => history.back()}>
+            <img src={lb().src} alt={lb().filename} onClick={(e) => e.stopPropagation()} />
+            <div class="lightbox-buttons" onClick={(e) => e.stopPropagation()}>
+              <button onClick={() => downloadFile(lb().src, lb().filename)}>Download</button>
+              <button onClick={() => history.back()}>Close</button>
+            </div>
+          </div>
+        )}
+      </Show>
     </>
   );
 }
