@@ -1,25 +1,37 @@
 services:
   server:
     image: node:20-alpine
-    working_dir: /app/server
-    command: sh -c "corepack enable && pnpm install && pnpm dev"
+    working_dir: /app
+    command: sh -c "corepack enable && pnpm install && pnpm --filter @clawchat/server dev"
+    environment:
+      - PUBLIC_HOST=0.0.0.0
     ports:
       - "3100:3100"
-    volumes:
-      - .:/app
-      - node_modules:/app/node_modules
-
-  client:
-    image: node:20-alpine
-    working_dir: /app/client
-    command: sh -c "corepack enable && pnpm install && pnpm dev --host"
-    ports:
       - "3101:3101"
     volumes:
       - .:/app
-      - node_modules:/app/node_modules
+      - server_store:/app/.pnpm-store
+      - server_root_modules:/app/node_modules
+      - server_modules:/app/server/node_modules
+
+  client:
+    image: node:20-alpine
+    working_dir: /app
+    command: sh -c "corepack enable && pnpm install && pnpm --filter @clawchat/client dev --host"
+    ports:
+      - "3102:3102"
+    volumes:
+      - .:/app
+      - client_store:/app/.pnpm-store
+      - client_root_modules:/app/node_modules
+      - client_modules:/app/client/node_modules
     depends_on:
       - server
 
 volumes:
-  node_modules:
+  server_store:
+  server_root_modules:
+  server_modules:
+  client_store:
+  client_root_modules:
+  client_modules:

@@ -12,8 +12,9 @@
 docker compose up
 ```
 
-Client: http://localhost:3101
-Server: http://localhost:3100
+Client: http://localhost:3102 (dev only, proxies to Public API)
+Agent API: http://127.0.0.1:3100 (localhost only)
+Public API: http://127.0.0.1:3101 (nginx proxies to this in prod)
 
 ## Project Structure
 
