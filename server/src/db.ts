@@ -26,6 +26,18 @@ try {
   // Column already exists
 }
 
+// Widget state table
+db.exec(`
+  CREATE TABLE IF NOT EXISTS widget_state (
+    conversationId TEXT NOT NULL,
+    widgetId TEXT NOT NULL,
+    state TEXT NOT NULL,
+    version INTEGER DEFAULT 1,
+    updatedAt TEXT NOT NULL,
+    PRIMARY KEY (conversationId, widgetId)
+  )
+`);
+
 interface DbMessage {
   id: string;
   conversationId: string;
@@ -54,4 +66,41 @@ export function addMessage(message: Message): Message {
     message.createdAt
   );
   return message;
+}
+
+export interface WidgetState {
+  conversationId: string;
+  widgetId: string;
+  state: unknown;
+  version: number;
+  updatedAt: string;
+}
+
+export function getWidgetState(conversationId: string, widgetId: string): WidgetState | null {
+  const row = db.prepare('SELECT * FROM widget_state WHERE conversationId = ? AND widgetId = ?').get(conversationId, widgetId) as {
+    conversationId: string;
+    widgetId: string;
+    state: string;
+    version: number;
+    updatedAt: string;
+  } | undefined;
+  if (!row) return null;
+  return {
+    ...row,
+    state: JSON.parse(row.state),
+  };
+}
+
+export function setWidgetState(conversationId: string, widgetId: string, state: unknown, version: number = 1): WidgetState {
+  const updatedAt = new Date().toISOString();
+  const stmt = db.prepare(`
+    INSERT INTO widget_state (conversationId, widgetId, state, version, updatedAt)
+    VALUES (?, ?, ?, ?, ?)
+    ON CONFLICT(conversationId, widgetId) DO UPDATE SET
+      state = excluded.state,
+      version = excluded.version,
+      updatedAt = excluded.updatedAt
+  `);
+  stmt.run(conversationId, widgetId, JSON.stringify(state), version, updatedAt);
+  return { conversationId, widgetId, state, version, updatedAt };
 }

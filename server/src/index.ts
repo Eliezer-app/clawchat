@@ -2,7 +2,7 @@ import express from 'express';
 import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
-import { getMessages, addMessage } from './db.js';
+import { getMessages, addMessage, getWidgetState, setWidgetState } from './db.js';
 import type { Message, Attachment } from '@clawchat/shared';
 
 const agentPort = process.env.AGENT_PORT || 3100;
@@ -158,6 +158,72 @@ publicApp.post('/api/upload', upload.single('file'), (req, res) => {
 
 publicApp.get('/api/health', (req, res) => {
   res.json({ status: 'ok', api: 'public' });
+});
+
+// Widget state endpoints
+publicApp.get('/api/widget-state/:conversationId/:widgetId', (req, res) => {
+  const { conversationId, widgetId } = req.params;
+  const state = getWidgetState(conversationId, widgetId);
+  if (!state) {
+    res.status(404).json({ error: 'Not found' });
+    return;
+  }
+  res.json(state);
+});
+
+publicApp.post('/api/widget-state/:conversationId/:widgetId', (req, res) => {
+  const { conversationId, widgetId } = req.params;
+  const { state, version } = req.body;
+
+  // Validate state is present and not too large (1MB limit)
+  if (state === undefined) {
+    res.status(400).json({ error: 'State required' });
+    return;
+  }
+  const stateStr = JSON.stringify(state);
+  if (stateStr.length > 1024 * 1024) {
+    res.status(400).json({ error: 'State too large (max 1MB)' });
+    return;
+  }
+
+  const result = setWidgetState(conversationId, widgetId, state, version || 1);
+  res.json(result);
+});
+
+// Widget action endpoint - extensible by agent
+interface WidgetActionContext {
+  conversationId: string;
+  widgetId: string;
+  payload: unknown;
+}
+type WidgetActionHandler = (ctx: WidgetActionContext) => Promise<unknown> | unknown;
+const widgetActionHandlers: Map<string, WidgetActionHandler> = new Map();
+
+export function registerWidgetAction(action: string, handler: WidgetActionHandler) {
+  widgetActionHandlers.set(action, handler);
+}
+
+publicApp.post('/api/widget-action/:conversationId/:widgetId', async (req, res) => {
+  const { conversationId, widgetId } = req.params;
+  const { action, payload } = req.body;
+
+  if (!action || typeof action !== 'string') {
+    res.status(400).json({ ok: false, error: 'Action required' });
+    return;
+  }
+
+  const handler = widgetActionHandlers.get(action);
+  if (handler) {
+    try {
+      const result = await handler({ conversationId, widgetId, payload });
+      res.json({ ok: true, result });
+    } catch (err) {
+      res.status(500).json({ ok: false, error: (err as Error).message });
+    }
+  } else {
+    // Default: echo back for testing
+    res.json({ ok: true, echo: { conversationId, widgetId, action, payload } });
+  }
 });
 
 // ===================

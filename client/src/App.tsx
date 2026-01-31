@@ -52,21 +52,123 @@ function CodeBlock(props: { lang: string; code: string }) {
   );
 }
 
+function Widget(props: { code: string; conversationId?: string }) {
+  const [visible, setVisible] = createSignal(false);
+  const [widgetId, setWidgetId] = createSignal<string | null>(null);
+  let containerRef: HTMLDivElement | undefined;
+  let iframeRef: HTMLIFrameElement | undefined;
+  let saveTimeout: number | undefined;
+
+  const convId = () => props.conversationId || 'default';
+
+  const handleMessage = async (e: MessageEvent) => {
+    // Only handle messages from our iframe
+    if (!iframeRef || e.source !== iframeRef.contentWindow) return;
+    const { type, id, state, version } = e.data || {};
+
+    if (type === 'ready' && id) {
+      setWidgetId(id);
+      // Fetch saved state from server
+      try {
+        const res = await fetch(`/api/widget-state/${convId()}/${id}`);
+        const saved = res.ok ? await res.json() : null;
+        iframeRef?.contentWindow?.postMessage({
+          type: 'init',
+          state: saved?.state || null,
+          stateVersion: saved?.version || null,
+        }, '*');
+      } catch {
+        iframeRef?.contentWindow?.postMessage({ type: 'init', state: null }, '*');
+      }
+    }
+
+    if (type === 'state' && widgetId()) {
+      // Debounce saves - wait 500ms of inactivity
+      if (saveTimeout) clearTimeout(saveTimeout);
+      saveTimeout = setTimeout(() => {
+        fetch(`/api/widget-state/${convId()}/${widgetId()}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ state, version: version || 1 }),
+        }).catch(() => {});
+      }, 500) as unknown as number;
+    }
+
+    if (type === 'resize' && e.data.height && iframeRef) {
+      iframeRef.style.height = Math.min(Math.max(e.data.height, 60), 600) + 'px';
+    }
+
+    // Proxy requests to server
+    if (type === 'request' && e.data.action) {
+      const { id, action, payload } = e.data;
+      fetch(`/api/widget-action/${convId()}/${widgetId()}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action, payload }),
+      })
+        .then(res => res.json())
+        .then(data => {
+          iframeRef?.contentWindow?.postMessage({ type: 'response', id, data }, '*');
+        })
+        .catch(err => {
+          iframeRef?.contentWindow?.postMessage({ type: 'response', id, error: err.message }, '*');
+        });
+    }
+  };
+
+  onMount(() => {
+    if (!containerRef) return;
+    window.addEventListener('message', handleMessage);
+
+    const observer = new IntersectionObserver(
+      ([entry]) => setVisible(entry.isIntersecting),
+      { threshold: 0.1 }
+    );
+    observer.observe(containerRef);
+
+    onCleanup(() => {
+      observer.disconnect();
+      window.removeEventListener('message', handleMessage);
+      if (saveTimeout) clearTimeout(saveTimeout);
+    });
+  });
+
+  return (
+    <div class="widget-container" ref={containerRef}>
+      <Show when={visible()} fallback={<div class="widget-placeholder">Widget paused</div>}>
+        <iframe
+          ref={iframeRef}
+          srcdoc={props.code}
+          sandbox="allow-scripts"
+          class="widget-iframe"
+        />
+      </Show>
+    </div>
+  );
+}
+
 function AudioPlayer(props: { src: string; filename?: string }) {
   const [playing, setPlaying] = createSignal(false);
   const [currentTime, setCurrentTime] = createSignal(0);
   const [duration, setDuration] = createSignal(0);
   let audio: HTMLAudioElement | undefined;
 
+  const onMeta = () => setDuration(audio!.duration);
+  const onTime = () => setCurrentTime(audio!.currentTime);
+  const onEnd = () => { setPlaying(false); setCurrentTime(0); };
+
   onMount(() => {
     audio = new Audio(props.src);
-    audio.addEventListener('loadedmetadata', () => setDuration(audio!.duration));
-    audio.addEventListener('timeupdate', () => setCurrentTime(audio!.currentTime));
-    audio.addEventListener('ended', () => { setPlaying(false); setCurrentTime(0); });
+    audio.addEventListener('loadedmetadata', onMeta);
+    audio.addEventListener('timeupdate', onTime);
+    audio.addEventListener('ended', onEnd);
   });
 
   onCleanup(() => {
     if (audio) {
+      audio.removeEventListener('loadedmetadata', onMeta);
+      audio.removeEventListener('timeupdate', onTime);
+      audio.removeEventListener('ended', onEnd);
       audio.pause();
       audio.src = '';
     }
@@ -226,7 +328,8 @@ export default function App() {
   const isAudio = (mimetype: string) => mimetype.startsWith('audio/');
 
   const linkify = (text: string) => {
-    const urlRegex = /(https?:\/\/[^\s]+)/g;
+    // Match URLs but exclude trailing punctuation
+    const urlRegex = /(https?:\/\/[^\s<>\"')\]]+[^\s<>\"')\].,;:!?])/g;
     const parts = text.split(urlRegex);
     return parts.map((part) =>
       urlRegex.test(part)
@@ -235,7 +338,7 @@ export default function App() {
     );
   };
 
-  const renderContent = (text: string) => {
+  const renderContent = (text: string, conversationId: string) => {
     const codeBlockRegex = /```(\w*)\n?([\s\S]*?)```/g;
     const parts: (string | { lang: string; code: string })[] = [];
     let lastIndex = 0;
@@ -256,7 +359,9 @@ export default function App() {
     return parts.map((part) =>
       typeof part === 'string'
         ? linkify(part)
-        : <CodeBlock lang={part.lang} code={part.code} />
+        : part.lang === 'widget'
+          ? <Widget code={part.code} conversationId={conversationId} />
+          : <CodeBlock lang={part.lang} code={part.code} />
     );
   };
 
@@ -499,6 +604,28 @@ export default function App() {
           font-family: inherit;
           background: transparent !important;
           color: inherit;
+        }
+
+        .widget-container {
+          margin-top: 8px;
+          border-radius: 8px;
+          overflow: hidden;
+          background: #fff;
+          border: 1px solid #e0e0e0;
+        }
+
+        .widget-iframe {
+          width: 100%;
+          height: 100px;
+          border: none;
+          display: block;
+        }
+
+        .widget-placeholder {
+          padding: 24px;
+          text-align: center;
+          color: #888;
+          font-size: 13px;
         }
 
         .bubble .file-attachment {
@@ -930,7 +1057,7 @@ export default function App() {
               {(msg) => (
                 <div class={`message ${msg.role}`}>
                   <div class="bubble">
-                    <Show when={msg.content}>{renderContent(msg.content)}</Show>
+                    <Show when={msg.content}>{renderContent(msg.content, msg.conversationId)}</Show>
                     <Show when={msg.attachment}>
                       {(att) => (
                         <Show
