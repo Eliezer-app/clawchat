@@ -55,6 +55,7 @@ function CodeBlock(props: { lang: string; code: string }) {
 function Widget(props: { code: string; conversationId?: string }) {
   const [visible, setVisible] = createSignal(false);
   const [widgetId, setWidgetId] = createSignal<string | null>(null);
+  const [lastHeight, setLastHeight] = createSignal(100);
   let containerRef: HTMLDivElement | undefined;
   let iframeRef: HTMLIFrameElement | undefined;
   let saveTimeout: number | undefined;
@@ -95,7 +96,9 @@ function Widget(props: { code: string; conversationId?: string }) {
     }
 
     if (type === 'resize' && e.data.height && iframeRef) {
-      iframeRef.style.height = Math.min(Math.max(e.data.height, 60), 600) + 'px';
+      const h = Math.min(Math.max(e.data.height, 60), 800);
+      iframeRef.style.height = h + 'px';
+      setLastHeight(h);
     }
 
     // Proxy requests to server
@@ -135,7 +138,11 @@ function Widget(props: { code: string; conversationId?: string }) {
 
   return (
     <div class="widget-container" ref={containerRef}>
-      <Show when={visible()} fallback={<div class="widget-placeholder">Widget paused</div>}>
+      <Show when={visible()} fallback={
+        <div class="widget-placeholder" style={{ height: lastHeight() + 'px' }}>
+          Widget paused
+        </div>
+      }>
         <iframe
           ref={iframeRef}
           srcdoc={props.code}
@@ -274,6 +281,10 @@ export default function App() {
         const data = JSON.parse(e.data);
         if (data.type === 'message') {
           setMessages(msgs => [...msgs, data.message]);
+        } else if (data.type === 'delete') {
+          setMessages(msgs => msgs.filter(m => m.id !== data.id));
+        } else if (data.type === 'update') {
+          setMessages(msgs => msgs.map(m => m.id === data.message.id ? data.message : m));
         }
       };
       events.onerror = () => {
@@ -422,6 +433,11 @@ export default function App() {
     URL.revokeObjectURL(a.href);
   };
 
+  const deleteMsg = async (id: string) => {
+    if (!confirm('Delete this message?')) return;
+    await fetch(`/api/messages/${id}`, { method: 'DELETE' });
+  };
+
   return (
     <>
       <style>{`
@@ -510,6 +526,7 @@ export default function App() {
         }
 
         .bubble {
+          position: relative;
           padding: 12px 16px;
           border-radius: 18px;
           font-size: 15px;
@@ -612,6 +629,10 @@ export default function App() {
           overflow: hidden;
           background: #fff;
           border: 1px solid #e0e0e0;
+          width: calc(100vw - 64px);
+          max-width: 720px;
+          margin-left: -16px;
+          margin-right: -16px;
         }
 
         .widget-iframe {
@@ -622,10 +643,12 @@ export default function App() {
         }
 
         .widget-placeholder {
-          padding: 24px;
-          text-align: center;
+          display: flex;
+          align-items: center;
+          justify-content: center;
           color: #888;
           font-size: 13px;
+          background: #f5f5f5;
         }
 
         .bubble .file-attachment {
@@ -669,6 +692,34 @@ export default function App() {
           color: #999;
           margin-top: 4px;
           padding: 0 4px;
+        }
+
+        .delete-btn {
+          position: absolute;
+          top: 4px;
+          right: 4px;
+          opacity: 0;
+          background: rgba(0,0,0,0.3);
+          border: none;
+          color: #fff;
+          font-size: 14px;
+          width: 20px;
+          height: 20px;
+          border-radius: 50%;
+          cursor: pointer;
+          transition: opacity 0.2s, background 0.2s;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          line-height: 1;
+        }
+
+        .message:hover .delete-btn {
+          opacity: 1;
+        }
+
+        .delete-btn:hover {
+          background: #ef4444;
         }
 
         .input-area {
@@ -1057,6 +1108,7 @@ export default function App() {
               {(msg) => (
                 <div class={`message ${msg.role}`}>
                   <div class="bubble">
+                    <button class="delete-btn" onClick={() => deleteMsg(msg.id)}>×</button>
                     <Show when={msg.content}>{renderContent(msg.content, msg.conversationId)}</Show>
                     <Show when={msg.attachment}>
                       {(att) => (

@@ -2,7 +2,7 @@ import express from 'express';
 import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
-import { getMessages, addMessage, getWidgetState, setWidgetState } from './db.js';
+import { getMessages, addMessage, deleteMessage, updateMessage, getWidgetState, setWidgetState } from './db.js';
 import type { Message, Attachment } from '@clawchat/shared';
 
 const agentPort = process.env.AGENT_PORT || 3100;
@@ -93,6 +93,33 @@ agentApp.post('/upload', upload.single('file'), (req, res) => {
   res.json(message);
 });
 
+agentApp.delete('/messages/:id', (req, res) => {
+  const { id } = req.params;
+  const deleted = deleteMessage(id);
+  if (!deleted) {
+    res.status(404).json({ error: 'Message not found' });
+    return;
+  }
+  broadcast({ type: 'delete', id });
+  res.json({ ok: true });
+});
+
+agentApp.patch('/messages/:id', (req, res) => {
+  const { id } = req.params;
+  const { content } = req.body;
+  if (content === undefined || typeof content !== 'string') {
+    res.status(400).json({ error: 'Content required' });
+    return;
+  }
+  const message = updateMessage(id, content);
+  if (!message) {
+    res.status(404).json({ error: 'Message not found' });
+    return;
+  }
+  broadcast({ type: 'update', message });
+  res.json(message);
+});
+
 agentApp.get('/health', (req, res) => {
   res.json({ status: 'ok', api: 'agent' });
 });
@@ -154,6 +181,17 @@ publicApp.post('/api/upload', upload.single('file'), (req, res) => {
 
   const message = createMessage('user', content, attachment);
   res.json(message);
+});
+
+publicApp.delete('/api/messages/:id', (req, res) => {
+  const { id } = req.params;
+  const deleted = deleteMessage(id);
+  if (!deleted) {
+    res.status(404).json({ error: 'Message not found' });
+    return;
+  }
+  broadcast({ type: 'delete', id });
+  res.json({ ok: true });
 });
 
 publicApp.get('/api/health', (req, res) => {

@@ -68,6 +68,23 @@ export function addMessage(message: Message): Message {
   return message;
 }
 
+export function deleteMessage(id: string): boolean {
+  const result = db.prepare('DELETE FROM messages WHERE id = ?').run(id);
+  return result.changes > 0;
+}
+
+export function updateMessage(id: string, content: string): Message | null {
+  const stmt = db.prepare('UPDATE messages SET content = ? WHERE id = ?');
+  const result = stmt.run(content, id);
+  if (result.changes === 0) return null;
+  const row = db.prepare('SELECT * FROM messages WHERE id = ?').get(id) as DbMessage | undefined;
+  if (!row) return null;
+  return {
+    ...row,
+    attachment: row.attachment ? JSON.parse(row.attachment) as Attachment : undefined,
+  };
+}
+
 export interface WidgetState {
   conversationId: string;
   widgetId: string;
