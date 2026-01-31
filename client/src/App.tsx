@@ -1,5 +1,72 @@
-import { createSignal, onMount, For, createEffect, Show } from 'solid-js';
+import { createSignal, onMount, For, createEffect, Show, onCleanup } from 'solid-js';
 import type { Message } from '@clawchat/shared';
+
+function AudioPlayer(props: { src: string; filename?: string }) {
+  const [playing, setPlaying] = createSignal(false);
+  const [currentTime, setCurrentTime] = createSignal(0);
+  const [duration, setDuration] = createSignal(0);
+  let audio: HTMLAudioElement | undefined;
+
+  onMount(() => {
+    audio = new Audio(props.src);
+    audio.addEventListener('loadedmetadata', () => setDuration(audio!.duration));
+    audio.addEventListener('timeupdate', () => setCurrentTime(audio!.currentTime));
+    audio.addEventListener('ended', () => { setPlaying(false); setCurrentTime(0); });
+  });
+
+  onCleanup(() => {
+    if (audio) {
+      audio.pause();
+      audio.src = '';
+    }
+  });
+
+  const toggle = () => {
+    if (!audio) return;
+    if (playing()) {
+      audio.pause();
+    } else {
+      audio.play();
+    }
+    setPlaying(!playing());
+  };
+
+  const seek = (e: MouseEvent) => {
+    if (!audio || !duration()) return;
+    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+    const pct = (e.clientX - rect.left) / rect.width;
+    audio.currentTime = pct * duration();
+  };
+
+  const fmt = (s: number) => {
+    const m = Math.floor(s / 60);
+    const sec = Math.floor(s % 60);
+    return `${m}:${sec.toString().padStart(2, '0')}`;
+  };
+
+  const download = async () => {
+    const res = await fetch(props.src);
+    const blob = await res.blob();
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = props.filename || 'audio.webm';
+    a.click();
+    URL.revokeObjectURL(a.href);
+  };
+
+  return (
+    <div class="audio-player">
+      <button class="audio-play" onClick={toggle}>
+        {playing() ? '⏸' : '▶'}
+      </button>
+      <div class="audio-progress" onClick={seek}>
+        <div class="audio-progress-bar" style={{ width: `${duration() ? (currentTime() / duration()) * 100 : 0}%` }} />
+      </div>
+      <span class="audio-time">{fmt(currentTime())}/{fmt(duration())}</span>
+      <button class="audio-download" onClick={download}>↓</button>
+    </div>
+  );
+}
 
 export default function App() {
   const [messages, setMessages] = createSignal<Message[]>([]);
@@ -372,52 +439,56 @@ export default function App() {
 
         .input-row {
           display: flex;
-          gap: 10px;
+          align-items: center;
+          gap: 8px;
         }
 
-        .input-area input[type="text"] {
+        .input-pill {
           flex: 1;
-          padding: 12px 16px;
-          border: 1px solid #e0e0e0;
+          display: flex;
+          align-items: stretch;
           border-radius: 24px;
+          overflow: hidden;
+          min-width: 0;
+          border: 1px solid #e0e0e0;
+        }
+
+        .input-pill input[type="text"] {
+          flex: 1;
+          min-width: 0;
+          padding: 12px 16px;
+          border: none;
+          background: #fff;
           font-size: 16px;
           outline: none;
-          transition: border-color 0.2s, box-shadow 0.2s;
         }
 
-        .input-area input[type="text"]:focus {
-          border-color: #667eea;
-          box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        .input-pill input[type="text"]::placeholder {
+          color: #999;
         }
 
         .input-area input[type="file"] {
           display: none;
         }
 
-        .attach-btn {
-          padding: 12px;
+        .attach-btn,
+        .mic-btn {
+          width: 44px;
+          height: 44px;
+          padding: 0;
           background: #f0f0f0;
           border: none;
           border-radius: 50%;
           cursor: pointer;
           font-size: 20px;
+          flex-shrink: 0;
+          display: flex;
+          align-items: center;
+          justify-content: center;
           transition: background 0.2s;
         }
 
-        .attach-btn:hover {
-          background: #e0e0e0;
-        }
-
-        .mic-btn {
-          padding: 12px;
-          background: #f0f0f0;
-          border: none;
-          border-radius: 50%;
-          cursor: pointer;
-          font-size: 20px;
-          transition: background 0.2s, transform 0.1s;
-        }
-
+        .attach-btn:hover,
         .mic-btn:hover {
           background: #e0e0e0;
         }
@@ -472,40 +543,89 @@ export default function App() {
           background: #b91c1c;
         }
 
-        .voice-message {
+        .audio-player {
           display: flex;
           align-items: center;
           gap: 10px;
-          min-width: 180px;
+          width: 75vw;
+          max-width: 300px;
           padding: 4px 0;
         }
 
-        .voice-message::before {
-          content: '🎤';
-          font-size: 18px;
+        .audio-play {
+          width: 36px;
+          height: 36px;
+          border-radius: 50%;
+          border: none;
+          background: rgba(255,255,255,0.2);
+          color: inherit;
+          font-size: 14px;
+          cursor: pointer;
+          flex-shrink: 0;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+        }
+
+        .message.agent .audio-play {
+          background: rgba(0,0,0,0.1);
+        }
+
+        .audio-progress {
+          flex: 1;
+          height: 6px;
+          background: rgba(255,255,255,0.3);
+          border-radius: 3px;
+          cursor: pointer;
+          overflow: hidden;
+        }
+
+        .message.agent .audio-progress {
+          background: rgba(0,0,0,0.15);
+        }
+
+        .audio-progress-bar {
+          height: 100%;
+          background: currentColor;
           opacity: 0.8;
+          border-radius: 3px;
+          transition: width 0.1s;
         }
 
-        .voice-message audio {
-          width: 100%;
-          height: 32px;
-          border-radius: 16px;
+        .audio-time {
+          font-size: 11px;
+          opacity: 0.8;
+          flex-shrink: 0;
+          font-variant-numeric: tabular-nums;
         }
 
-        .message.user .voice-message audio {
-          filter: invert(1) hue-rotate(180deg);
+        .audio-download {
+          width: 28px;
+          height: 28px;
+          border-radius: 50%;
+          border: none;
+          background: rgba(255,255,255,0.2);
+          color: inherit;
+          font-size: 14px;
+          cursor: pointer;
+          flex-shrink: 0;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+        }
+
+        .message.agent .audio-download {
+          background: rgba(0,0,0,0.1);
         }
 
         .send-btn {
-          padding: 12px 20px;
+          padding: 12px 16px;
           background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
           color: white;
           border: none;
-          border-radius: 24px;
-          font-size: 15px;
-          font-weight: 600;
+          font-size: 18px;
           cursor: pointer;
-          transition: transform 0.1s, box-shadow 0.2s;
+          flex-shrink: 0;
         }
 
         .send-btn:disabled {
@@ -596,19 +716,23 @@ export default function App() {
             background: #242424;
             border-top-color: #333;
           }
-          .input-area input[type="text"] {
-            background: #333;
+          .input-pill {
             border-color: #444;
-            color: #fff;
           }
-          .input-area input[type="text"]::placeholder {
-            color: #888;
-          }
-          .attach-btn {
+          .input-pill input[type="text"] {
             background: #333;
             color: #fff;
           }
-          .attach-btn:hover {
+          .input-pill input[type="text"]::placeholder {
+            color: #666;
+          }
+          .attach-btn,
+          .mic-btn {
+            background: #333;
+            color: #fff;
+          }
+          .attach-btn:hover,
+          .mic-btn:hover {
             background: #444;
           }
           .file-preview {
@@ -619,13 +743,6 @@ export default function App() {
           }
           .time {
             color: #666;
-          }
-          .mic-btn {
-            background: #333;
-            color: #fff;
-          }
-          .mic-btn:hover {
-            background: #444;
           }
           .recording-indicator {
             background: #3f1e1e;
@@ -663,9 +780,7 @@ export default function App() {
                                 </a>
                               }
                             >
-                              <div class="voice-message">
-                                <audio controls src={getFileUrl(msg)} preload="metadata" />
-                              </div>
+                              <AudioPlayer src={getFileUrl(msg)} filename={att().filename} />
                             </Show>
                           }
                         >
@@ -730,16 +845,18 @@ export default function App() {
             >
               🎤
             </button>
-            <input
-              type="text"
-              value={input()}
-              onInput={(e) => setInput(e.currentTarget.value)}
-              onKeyDown={(e) => e.key === 'Enter' && !uploading() && send()}
-              placeholder="Type a message..."
-            />
-            <button class="send-btn" onClick={() => send()} disabled={uploading()}>
-              {uploading() ? '...' : 'Send'}
-            </button>
+            <div class="input-pill">
+              <input
+                type="text"
+                value={input()}
+                onInput={(e) => setInput(e.currentTarget.value)}
+                onKeyDown={(e) => e.key === 'Enter' && !uploading() && send()}
+                placeholder="Type a message..."
+              />
+              <button class="send-btn" onClick={() => send()} disabled={uploading()}>
+                {uploading() ? '…' : '➤'}
+              </button>
+            </div>
           </div>
         </div>
       </div>

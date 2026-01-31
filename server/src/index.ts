@@ -70,6 +70,29 @@ agentApp.post('/send', (req, res) => {
   res.json(message);
 });
 
+agentApp.post('/upload', upload.single('file'), (req, res) => {
+  const file = req.file;
+  const content = (req.body.content as string) || '';
+
+  if (!file && !content.trim()) {
+    res.status(400).json({ error: 'File or content required' });
+    return;
+  }
+
+  let attachment: Attachment | undefined;
+  if (file) {
+    attachment = {
+      id: path.basename(file.filename, path.extname(file.filename)),
+      filename: file.originalname,
+      mimetype: file.mimetype,
+      size: file.size,
+    };
+  }
+
+  const message = createMessage('agent', content, attachment);
+  res.json(message);
+});
+
 agentApp.get('/health', (req, res) => {
   res.json({ status: 'ok', api: 'agent' });
 });
