@@ -1,6 +1,9 @@
 {
   "name": "clawchat",
   "private": true,
+  "scripts": {
+    "invite": "pnpm --filter @clawchat/server agent-invite"
+  },
   "workspaces": ["server", "client", "shared"],
   "pnpm": {
     "onlyBuiltDependencies": ["better-sqlite3", "esbuild"]
