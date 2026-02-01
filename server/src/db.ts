@@ -38,6 +38,25 @@ db.exec(`
   )
 `);
 
+// Session table for authenticated devices
+db.exec(`
+  CREATE TABLE IF NOT EXISTS sessions (
+    id TEXT PRIMARY KEY,
+    token TEXT UNIQUE NOT NULL,
+    createdAt TEXT NOT NULL,
+    expiresAt TEXT
+  )
+`);
+
+// Invite table for QR code auth
+db.exec(`
+  CREATE TABLE IF NOT EXISTS invites (
+    token TEXT PRIMARY KEY,
+    expiresAt TEXT NOT NULL,
+    used INTEGER DEFAULT 0
+  )
+`);
+
 interface DbMessage {
   id: string;
   conversationId: string;
@@ -120,4 +139,75 @@ export function setWidgetState(conversationId: string, widgetId: string, state: 
   `);
   stmt.run(conversationId, widgetId, JSON.stringify(state), version, updatedAt);
   return { conversationId, widgetId, state, version, updatedAt };
+}
+
+// ===================
+// Session Management
+// ===================
+
+export interface Session {
+  id: string;
+  token: string;
+  createdAt: string;
+  expiresAt: string | null;
+}
+
+export function createSession(expiresInMs?: number): Session {
+  const id = crypto.randomUUID();
+  const token = crypto.randomUUID();
+  const createdAt = new Date().toISOString();
+  const expiresAt = expiresInMs ? new Date(Date.now() + expiresInMs).toISOString() : null;
+  
+  db.prepare('INSERT INTO sessions (id, token, createdAt, expiresAt) VALUES (?, ?, ?, ?)').run(id, token, createdAt, expiresAt);
+  return { id, token, createdAt, expiresAt };
+}
+
+export function getSessionByToken(token: string): Session | null {
+  const row = db.prepare('SELECT * FROM sessions WHERE token = ?').get(token) as Session | undefined;
+  if (!row) return null;
+  // Check expiry
+  if (row.expiresAt && new Date(row.expiresAt) < new Date()) {
+    db.prepare('DELETE FROM sessions WHERE id = ?').run(row.id);
+    return null;
+  }
+  return row;
+}
+
+export function deleteSession(token: string): boolean {
+  const result = db.prepare('DELETE FROM sessions WHERE token = ?').run(token);
+  return result.changes > 0;
+}
+
+// ===================
+// Invite Management
+// ===================
+
+export interface Invite {
+  token: string;
+  expiresAt: string;
+  used: boolean;
+}
+
+export function createInvite(expiresInMs: number = 5 * 60 * 1000): Invite {
+  const token = crypto.randomUUID();
+  const expiresAt = new Date(Date.now() + expiresInMs).toISOString();
+  
+  db.prepare('INSERT INTO invites (token, expiresAt, used) VALUES (?, ?, 0)').run(token, expiresAt);
+  return { token, expiresAt, used: false };
+}
+
+export function getInvite(token: string): Invite | null {
+  const row = db.prepare('SELECT * FROM invites WHERE token = ?').get(token) as { token: string; expiresAt: string; used: number } | undefined;
+  if (!row) return null;
+  return { token: row.token, expiresAt: row.expiresAt, used: row.used === 1 };
+}
+
+export function markInviteUsed(token: string): boolean {
+  const result = db.prepare('UPDATE invites SET used = 1 WHERE token = ? AND used = 0').run(token);
+  return result.changes > 0;
+}
+
+export function cleanExpiredInvites(): number {
+  const result = db.prepare('DELETE FROM invites WHERE expiresAt < ?').run(new Date().toISOString());
+  return result.changes;
 }

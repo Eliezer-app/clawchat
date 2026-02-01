@@ -1,5 +1,10 @@
 # Auth Plan
 
+> ✅ **Status: Implemented** (2026-02-01)
+> 
+> Core auth flow is complete: QR invites, sessions, middleware.
+> Push notifications not yet implemented.
+
 ## Requirements
 
 - User must authenticate to access chat
