@@ -1,13 +1,21 @@
 import express from 'express';
+import cookieParser from 'cookie-parser';
 import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
-import { getMessages, addMessage, deleteMessage, updateMessage, getWidgetState, setWidgetState } from './db.js';
+import {
+  getMessages, addMessage, deleteMessage, updateMessage,
+  getWidgetState, setWidgetState,
+  getInvite, markInviteUsed, createSession, getSessionByToken, deleteSession,
+  addPushSubscription, deletePushSubscription, getPushSubscriptions,
+  cleanupExpiredSessions, cleanupExpiredInvites,
+} from './db.js';
 import type { Message, Attachment } from '@clawchat/shared';
 
 const agentPort = process.env.AGENT_PORT || 3100;
 const publicPort = process.env.PUBLIC_PORT || 3101;
 const uploadsDir = process.env.UPLOADS_DIR || path.join(process.cwd(), 'data', 'uploads');
+const SESSION_COOKIE = 'clawchat_session';
 
 // Ensure uploads directory exists
 fs.mkdirSync(uploadsDir, { recursive: true });
@@ -40,6 +48,12 @@ setInterval(() => {
   sseClients.forEach(client => client.write(': heartbeat\n\n'));
 }, 30000);
 
+// Cleanup expired sessions/invites periodically
+setInterval(() => {
+  cleanupExpiredSessions();
+  cleanupExpiredInvites();
+}, 60 * 60 * 1000); // Every hour
+
 // Helper to create and broadcast a message
 function createMessage(role: Message['role'], content: string, attachment?: Attachment): Message {
   const message = addMessage({
@@ -55,7 +69,7 @@ function createMessage(role: Message['role'], content: string, attachment?: Atta
 }
 
 // ===================
-// Agent API (localhost only)
+// Agent API (localhost only, no auth)
 // ===================
 const agentApp = express();
 agentApp.use(express.json());
@@ -125,17 +139,120 @@ agentApp.get('/health', (req, res) => {
 });
 
 // ===================
-// Public API (authenticated)
+// Public API (with auth)
 // ===================
 const publicApp = express();
 publicApp.use(express.json());
+publicApp.use(cookieParser());
 
-// Serve uploaded files
+// Serve uploaded files (protected by auth middleware below)
 publicApp.use('/api/files', express.static(uploadsDir));
 
-// TODO: Add auth middleware here
+// ===================
+// Auth middleware
+// ===================
+declare global {
+  namespace Express {
+    interface Request {
+      session?: { id: string; token: string };
+    }
+  }
+}
 
-publicApp.get('/api/events', (req, res) => {
+function requireAuth(req: express.Request, res: express.Response, next: express.NextFunction) {
+  const token = req.cookies[SESSION_COOKIE];
+  if (!token) {
+    res.status(401).json({ error: 'Authentication required' });
+    return;
+  }
+  const session = getSessionByToken(token);
+  if (!session) {
+    res.clearCookie(SESSION_COOKIE);
+    res.status(401).json({ error: 'Invalid or expired session' });
+    return;
+  }
+  req.session = { id: session.id, token: session.token };
+  next();
+}
+
+// ===================
+// Auth routes (no auth required)
+// ===================
+
+// Verify invite and create session
+publicApp.get('/api/auth/invite', (req, res) => {
+  const { token } = req.query;
+  if (!token || typeof token !== 'string') {
+    res.status(400).json({ error: 'Invite token required' });
+    return;
+  }
+
+  const invite = getInvite(token);
+  if (!invite) {
+    res.status(404).json({ error: 'Invalid invite' });
+    return;
+  }
+  if (invite.used) {
+    res.status(400).json({ error: 'Invite already used' });
+    return;
+  }
+  if (new Date(invite.expiresAt) < new Date()) {
+    res.status(400).json({ error: 'Invite expired' });
+    return;
+  }
+
+  // Mark invite as used and create session
+  markInviteUsed(token);
+  const session = createSession();
+
+  // Set httpOnly cookie
+  res.cookie(SESSION_COOKIE, session.token, {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: 'lax',
+    maxAge: 30 * 24 * 60 * 60 * 1000, // 30 days
+  });
+
+  // Redirect to app root
+  res.redirect('/');
+});
+
+// Check auth status
+publicApp.get('/api/auth/me', (req, res) => {
+  const token = req.cookies[SESSION_COOKIE];
+  if (!token) {
+    res.status(401).json({ authenticated: false });
+    return;
+  }
+  const session = getSessionByToken(token);
+  if (!session) {
+    res.clearCookie(SESSION_COOKIE);
+    res.status(401).json({ authenticated: false });
+    return;
+  }
+  res.json({ authenticated: true, sessionId: session.id });
+});
+
+// Logout
+publicApp.post('/api/auth/logout', (req, res) => {
+  const token = req.cookies[SESSION_COOKIE];
+  if (token) {
+    deleteSession(token);
+    res.clearCookie(SESSION_COOKIE);
+  }
+  res.json({ ok: true });
+});
+
+// Health check (no auth)
+publicApp.get('/api/health', (req, res) => {
+  res.json({ status: 'ok', api: 'public' });
+});
+
+// ===================
+// Protected routes (auth required)
+// ===================
+
+publicApp.get('/api/events', requireAuth, (req, res) => {
   res.setHeader('Content-Type', 'text/event-stream');
   res.setHeader('Cache-Control', 'no-cache');
   res.setHeader('Connection', 'keep-alive');
@@ -145,11 +262,11 @@ publicApp.get('/api/events', (req, res) => {
   req.on('close', () => sseClients.delete(res));
 });
 
-publicApp.get('/api/messages', (req, res) => {
+publicApp.get('/api/messages', requireAuth, (req, res) => {
   res.json(getMessages());
 });
 
-publicApp.post('/api/messages', (req, res) => {
+publicApp.post('/api/messages', requireAuth, (req, res) => {
   const { content } = req.body;
   if (!content || typeof content !== 'string' || !content.trim()) {
     res.status(400).json({ error: 'Content required' });
@@ -160,7 +277,7 @@ publicApp.post('/api/messages', (req, res) => {
 });
 
 // File upload endpoint
-publicApp.post('/api/upload', upload.single('file'), (req, res) => {
+publicApp.post('/api/upload', requireAuth, upload.single('file'), (req, res) => {
   const file = req.file;
   const content = (req.body.content as string) || '';
 
@@ -183,7 +300,7 @@ publicApp.post('/api/upload', upload.single('file'), (req, res) => {
   res.json(message);
 });
 
-publicApp.delete('/api/messages/:id', (req, res) => {
+publicApp.delete('/api/messages/:id', requireAuth, (req, res) => {
   const { id } = req.params;
   const deleted = deleteMessage(id);
   if (!deleted) {
@@ -194,12 +311,8 @@ publicApp.delete('/api/messages/:id', (req, res) => {
   res.json({ ok: true });
 });
 
-publicApp.get('/api/health', (req, res) => {
-  res.json({ status: 'ok', api: 'public' });
-});
-
 // Widget state endpoints
-publicApp.get('/api/widget-state/:conversationId/:widgetId', (req, res) => {
+publicApp.get('/api/widget-state/:conversationId/:widgetId', requireAuth, (req, res) => {
   const { conversationId, widgetId } = req.params;
   const state = getWidgetState(conversationId, widgetId);
   if (!state) {
@@ -209,7 +322,7 @@ publicApp.get('/api/widget-state/:conversationId/:widgetId', (req, res) => {
   res.json(state);
 });
 
-publicApp.post('/api/widget-state/:conversationId/:widgetId', (req, res) => {
+publicApp.post('/api/widget-state/:conversationId/:widgetId', requireAuth, (req, res) => {
   const { conversationId, widgetId } = req.params;
   const { state, version } = req.body;
 
@@ -241,7 +354,7 @@ export function registerWidgetAction(action: string, handler: WidgetActionHandle
   widgetActionHandlers.set(action, handler);
 }
 
-publicApp.post('/api/widget-action/:conversationId/:widgetId', async (req, res) => {
+publicApp.post('/api/widget-action/:conversationId/:widgetId', requireAuth, async (req, res) => {
   const { conversationId, widgetId } = req.params;
   const { action, payload } = req.body;
 
@@ -262,6 +375,22 @@ publicApp.post('/api/widget-action/:conversationId/:widgetId', async (req, res) 
     // Default: echo back for testing
     res.json({ ok: true, echo: { conversationId, widgetId, action, payload } });
   }
+});
+
+// Push subscription endpoints
+publicApp.post('/api/push/subscribe', requireAuth, (req, res) => {
+  const { endpoint, keys } = req.body;
+  if (!endpoint || !keys?.p256dh || !keys?.auth) {
+    res.status(400).json({ error: 'Invalid subscription' });
+    return;
+  }
+  const subscription = addPushSubscription(req.session!.id, endpoint, keys.p256dh, keys.auth);
+  res.json({ ok: true, id: subscription.id });
+});
+
+publicApp.delete('/api/push/subscribe', requireAuth, (req, res) => {
+  deletePushSubscription(req.session!.id);
+  res.json({ ok: true });
 });
 
 // ===================
