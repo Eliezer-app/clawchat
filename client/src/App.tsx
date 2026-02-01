@@ -237,6 +237,7 @@ export default function App() {
   const [recording, setRecording] = createSignal(false);
   const [recordingDuration, setRecordingDuration] = createSignal(0);
   const [lightbox, setLightbox] = createSignal<{ src: string; filename: string } | null>(null);
+  const [showSettings, setShowSettings] = createSignal(false);
 
   const openLightbox = (src: string, filename: string) => {
     setLightbox({ src, filename });
@@ -459,6 +460,12 @@ export default function App() {
     await fetch(`/api/messages/${id}`, { method: 'DELETE' });
   };
 
+  const logout = async () => {
+    await fetch('/api/auth/logout', { method: 'POST' });
+    setAuthState('unauthenticated');
+    setShowSettings(false);
+  };
+
   // Auth gate - show different UI based on auth state
   return (
     <Switch>
@@ -563,6 +570,85 @@ export default function App() {
           background: #4ade80;
           border-radius: 50%;
           box-shadow: 0 0 6px #4ade80;
+        }
+
+        .header-title {
+          flex: 1;
+        }
+
+        .settings-btn {
+          background: rgba(255,255,255,0.2);
+          border: none;
+          color: white;
+          width: 32px;
+          height: 32px;
+          border-radius: 50%;
+          cursor: pointer;
+          font-size: 18px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          transition: background 0.2s;
+        }
+
+        .settings-btn:hover {
+          background: rgba(255,255,255,0.3);
+        }
+
+        .settings-overlay {
+          position: fixed;
+          inset: 0;
+          background: rgba(0,0,0,0.5);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          z-index: 1000;
+        }
+
+        .settings-page {
+          background: white;
+          border-radius: 16px;
+          padding: 24px;
+          width: 90%;
+          max-width: 400px;
+          box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+        }
+
+        .settings-header {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          margin-bottom: 24px;
+        }
+
+        .settings-header h2 {
+          margin: 0;
+          font-size: 20px;
+        }
+
+        .settings-close {
+          background: none;
+          border: none;
+          font-size: 24px;
+          cursor: pointer;
+          color: #666;
+        }
+
+        .logout-btn {
+          width: 100%;
+          padding: 14px;
+          background: #ef4444;
+          color: white;
+          border: none;
+          border-radius: 10px;
+          font-size: 16px;
+          font-weight: 500;
+          cursor: pointer;
+          transition: background 0.2s;
+        }
+
+        .logout-btn:hover {
+          background: #dc2626;
         }
 
         .messages {
@@ -1173,7 +1259,22 @@ export default function App() {
       `}</style>
 
       <div class="app">
-        <header class="header">ClawChat</header>
+        <header class="header">
+          <span class="header-title">ClawChat</span>
+          <button class="settings-btn" onClick={() => setShowSettings(true)}>⚙</button>
+        </header>
+
+        <Show when={showSettings()}>
+          <div class="settings-overlay" onClick={() => setShowSettings(false)}>
+            <div class="settings-page" onClick={(e) => e.stopPropagation()}>
+              <div class="settings-header">
+                <h2>Settings</h2>
+                <button class="settings-close" onClick={() => setShowSettings(false)}>×</button>
+              </div>
+              <button class="logout-btn" onClick={logout}>Log out</button>
+            </div>
+          </div>
+        </Show>
 
         <div class="messages" ref={messagesContainer}>
           {messages().length === 0 ? (
