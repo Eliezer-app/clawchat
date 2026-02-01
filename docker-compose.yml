@@ -18,6 +18,8 @@ services:
     image: node:20-alpine
     working_dir: /app
     command: sh -c "corepack enable && pnpm install && pnpm --filter @clawchat/client dev --host"
+    environment:
+      - API_URL=http://server:3101
     ports:
       - "3102:3102"
     volumes:

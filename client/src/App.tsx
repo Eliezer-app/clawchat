@@ -1,4 +1,4 @@
-import { createSignal, onMount, For, createEffect, Show, onCleanup } from 'solid-js';
+import { createSignal, onMount, For, createEffect, Show, onCleanup, Switch, Match } from 'solid-js';
 import type { Message } from '@clawchat/shared';
 import hljs from 'highlight.js/lib/core';
 import javascript from 'highlight.js/lib/languages/javascript';
@@ -460,63 +460,61 @@ export default function App() {
   };
 
   // Auth gate - show different UI based on auth state
-  if (authState() === 'checking') {
-    return (
-      <div style={{
-        display: 'flex',
-        'align-items': 'center',
-        'justify-content': 'center',
-        height: '100vh',
-        background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-        color: 'white',
-        'font-family': '-apple-system, BlinkMacSystemFont, sans-serif',
-      }}>
-        <div style={{ 'text-align': 'center' }}>
-          <div style={{ 'font-size': '48px', 'margin-bottom': '16px' }}>🔐</div>
-          <div style={{ 'font-size': '18px', opacity: 0.9 }}>Checking authentication...</div>
-        </div>
-      </div>
-    );
-  }
-
-  if (authState() === 'unauthenticated') {
-    return (
-      <div style={{
-        display: 'flex',
-        'align-items': 'center',
-        'justify-content': 'center',
-        height: '100vh',
-        background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-        color: 'white',
-        'font-family': '-apple-system, BlinkMacSystemFont, sans-serif',
-        padding: '20px',
-      }}>
+  return (
+    <Switch>
+      <Match when={authState() === 'checking'}>
         <div style={{
-          'text-align': 'center',
-          'max-width': '400px',
-          background: 'rgba(255,255,255,0.1)',
-          padding: '40px',
-          'border-radius': '20px',
-          'backdrop-filter': 'blur(10px)',
+          display: 'flex',
+          'align-items': 'center',
+          'justify-content': 'center',
+          height: '100vh',
+          background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+          color: 'white',
+          'font-family': '-apple-system, BlinkMacSystemFont, sans-serif',
         }}>
-          <div style={{ 'font-size': '64px', 'margin-bottom': '20px' }}>🔒</div>
-          <h1 style={{ 'font-size': '24px', 'margin-bottom': '12px', 'font-weight': '600' }}>
-            ClawChat
-          </h1>
-          <p style={{ 'font-size': '16px', opacity: 0.9, 'line-height': '1.5', 'margin-bottom': '24px' }}>
-            This chat is invite-only.<br />
-            Ask the admin for an invite link or scan a QR code.
-          </p>
-          <div style={{ 'font-size': '13px', opacity: 0.7 }}>
-            Run <code style={{ background: 'rgba(0,0,0,0.2)', padding: '2px 6px', 'border-radius': '4px' }}>pnpm invite</code> on the server to generate an invite.
+          <div style={{ 'text-align': 'center' }}>
+            <div style={{ 'font-size': '48px', 'margin-bottom': '16px' }}>🔐</div>
+            <div style={{ 'font-size': '18px', opacity: 0.9 }}>Checking authentication...</div>
           </div>
         </div>
-      </div>
-    );
-  }
+      </Match>
 
-  return (
-    <>
+      <Match when={authState() === 'unauthenticated'}>
+        <div style={{
+          display: 'flex',
+          'align-items': 'center',
+          'justify-content': 'center',
+          height: '100vh',
+          background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+          color: 'white',
+          'font-family': '-apple-system, BlinkMacSystemFont, sans-serif',
+          padding: '20px',
+        }}>
+          <div style={{
+            'text-align': 'center',
+            'max-width': '400px',
+            background: 'rgba(255,255,255,0.1)',
+            padding: '40px',
+            'border-radius': '20px',
+            'backdrop-filter': 'blur(10px)',
+          }}>
+            <div style={{ 'font-size': '64px', 'margin-bottom': '20px' }}>🔒</div>
+            <h1 style={{ 'font-size': '24px', 'margin-bottom': '12px', 'font-weight': '600' }}>
+              ClawChat
+            </h1>
+            <p style={{ 'font-size': '16px', opacity: 0.9, 'line-height': '1.5', 'margin-bottom': '24px' }}>
+              This chat is invite-only.<br />
+              Ask the admin for an invite link or scan a QR code.
+            </p>
+            <div style={{ 'font-size': '13px', opacity: 0.7 }}>
+              Run <code style={{ background: 'rgba(0,0,0,0.2)', padding: '2px 6px', 'border-radius': '4px' }}>pnpm invite</code> on the server to generate an invite.
+            </div>
+          </div>
+        </div>
+      </Match>
+
+      <Match when={authState() === 'authenticated'}>
+        <>
       <style>{`
         * {
           box-sizing: border-box;
@@ -1306,6 +1304,8 @@ export default function App() {
           </div>
         )}
       </Show>
-    </>
+        </>
+      </Match>
+    </Switch>
   );
 }
