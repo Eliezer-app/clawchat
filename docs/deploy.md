@@ -10,7 +10,7 @@ corepack enable
 ## Build
 
 ```bash
-git clone <repo> && cd clawchat
+git clone https://github.com/clawchat/clawchat.git && cd clawchat
 pnpm install
 pnpm --filter @clawchat/client build   # outputs to client/dist
 pnpm --filter @clawchat/server build   # outputs to server/dist
