@@ -7,11 +7,12 @@
 ## Run Locally
 
 ```bash
-docker compose up --build
+docker compose up
 ```
 
-- Client: http://localhost:5173
-- Server: http://localhost:3000
+- Client: http://localhost:3102
+- Agent API: http://127.0.0.1:3100 (localhost only, see [agent-api.md](agent-api.md))
+- Public API: http://localhost:3101
 
 ## Hot Reload
 

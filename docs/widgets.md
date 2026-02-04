@@ -1,94 +1,151 @@
-# Smart Widgets
+# Widgets
 
-Widgets are interactive HTML/JS apps embedded in chat messages using ```` ```widget ```` syntax.
+Widgets are interactive HTML/JS components embedded in chat messages:
 
-## Basic Widget
-
+~~~markdown
 ```widget
-<style>body { margin: 0; font: 16px sans-serif; }</style>
-<div id="app">Hello</div>
-<script>
-  // Your code here
-</script>
+<html>...</html>
 ```
+~~~
 
-Widgets run in sandboxed iframes (`sandbox="allow-scripts"`). No network access, no parent DOM access.
+A framework is auto-injected that handles resize detection. State and request APIs are available but must be explicitly used.
 
-## Lifecycle
+## Framework API
 
-- **Created** when scrolled into view (10% visible)
-- **Destroyed** when scrolled out of view
-- Placeholder preserves height to prevent scroll jumping
+### widget.onState(callback)
+Register a callback to receive state updates.
 
-## State Persistence
-
-Opt in by sending a `ready` message with a unique widget ID:
-
-```js
-// 1. Listen for init FIRST
-window.addEventListener('message', e => {
-  if (e.data.type === 'init') {
-    const savedState = e.data.state;  // null on first load
-    // Initialize your app
-  }
+```javascript
+widget.onState(state => {
+  tasks = state?.tasks || [];
+  render();
 });
-
-// 2. Register for state
-parent.postMessage({ type: 'ready', id: 'my-widget-v1' }, '*');
-
-// 3. Save state (debounced 500ms, max 1MB)
-parent.postMessage({ type: 'state', state: { count: 42 }, version: 1 }, '*');
+widget.getState(); // fetch initial state
 ```
 
-State syncs across devices and persists across page refreshes.
+### widget.setState(state)
+Save state to the server.
 
-**Note:** Widgets with the same ID share state. Use unique IDs per widget instance, or use shared IDs intentionally for linked widgets.
-
-## Resize
-
-Request height changes (min 60px, max 800px):
-
-```js
-parent.postMessage({ type: 'resize', height: 400 }, '*');
+```javascript
+widget.setState({ tasks });
 ```
 
-## Server Requests
+### widget.getState()
+Request current state from server. Call after registering onState callback.
 
-Call backend actions (registered server-side via `registerWidgetAction()`):
-
-```js
-// Send request
-const reqId = Math.random();
-parent.postMessage({
-  type: 'request',
-  id: reqId,
-  action: 'fetch-data',
-  payload: { query: 'test' }
-}, '*');
-
-// Receive response
-window.addEventListener('message', e => {
-  if (e.data.type === 'response' && e.data.id === reqId) {
-    if (e.data.error) console.error(e.data.error);
-    else console.log(e.data.data);
-  }
-});
+```javascript
+widget.getState();
 ```
 
-## Message Types Summary
+### widget.request(action, payload)
+Make a server request. Returns a promise.
+
+```javascript
+const result = await widget.request('vote', { option: 'A' });
+```
+
+## Widget ID
+
+Add a comment to set a stable ID for state persistence:
+
+```javascript
+// widget-id: my-todo-list
+```
+
+Widgets with the same ID share state. If omitted, ID is derived from code hash.
+
+## Auto Features
+
+- **Resize** - ResizeObserver auto-reports height changes
+- **CSS reset** - `box-sizing: border-box`, no margin/padding on body
+- **Sandbox** - Runs in `sandbox="allow-scripts"` iframe
+
+## Message Protocol
 
 | Direction | Type | Fields |
 |-----------|------|--------|
-| Widget → Parent | `ready` | `id` (widget ID) |
-| Widget → Parent | `state` | `state`, `version` |
+| Widget → Parent | `getState` | - |
+| Widget → Parent | `setState` | `state` |
 | Widget → Parent | `resize` | `height` |
 | Widget → Parent | `request` | `id`, `action`, `payload` |
-| Parent → Widget | `init` | `state`, `stateVersion` |
+| Parent → Widget | `state` | `state` |
 | Parent → Widget | `response` | `id`, `data`, `error?` |
 
-## Tips
+## Example: Todo List
 
-- Use deterministic widget IDs (e.g., `network-viz-v1`) for state to persist correctly
-- Send `resize` after content renders for proper sizing
-- "Dumb" widgets (no `ready` call) work fine, just no persistence
-- Keep state small - 1MB limit enforced server-side
+```widget
+<!DOCTYPE html>
+<html>
+<head>
+  <style>
+    body { font-family: system-ui; padding: 16px; }
+    input { padding: 8px; margin-right: 8px; }
+    button { padding: 8px 16px; }
+    ul { list-style: none; padding: 0; margin-top: 12px; }
+    li { padding: 8px; background: #f5f5f5; margin: 4px 0; border-radius: 4px; }
+  </style>
+</head>
+<body>
+  <input id="inp" placeholder="Add task..." />
+  <button onclick="add()">Add</button>
+  <ul id="list"></ul>
+  <script>
+    // widget-id: todo
+    let tasks = [];
+
+    function render() {
+      document.getElementById('list').innerHTML =
+        tasks.map(t => `<li>${t}</li>`).join('');
+    }
+
+    function add() {
+      const inp = document.getElementById('inp');
+      if (inp.value.trim()) {
+        tasks.push(inp.value.trim());
+        inp.value = '';
+        render();
+        widget.setState({ tasks });
+      }
+    }
+
+    widget.onState(state => {
+      tasks = state?.tasks || [];
+      render();
+    });
+    widget.getState();
+  </script>
+</body>
+</html>
+```
+
+## Example: Stateless Counter
+
+Widgets without state work fine - just don't use `widget.onState`/`widget.setState`:
+
+```widget
+<!DOCTYPE html>
+<html>
+<head>
+  <style>
+    body { font-family: system-ui; padding: 16px; display: flex; gap: 16px; align-items: center; }
+    button { padding: 8px 16px; font-size: 16px; }
+    span { font-size: 24px; min-width: 40px; text-align: center; }
+  </style>
+</head>
+<body>
+  <button onclick="count--; update()">-</button>
+  <span id="v">0</span>
+  <button onclick="count++; update()">+</button>
+  <script>
+    let count = 0;
+    const update = () => document.getElementById('v').textContent = count;
+  </script>
+</body>
+</html>
+```
+
+## Lifecycle
+
+- **Created** when approaching viewport (200px before visible)
+- **Stays loaded** once created (not unloaded on scroll)
+- Scroll stays at bottom as widgets resize during page load

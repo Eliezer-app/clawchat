@@ -125,6 +125,16 @@ agentApp.get('/health', (req, res) => {
   res.json({ status: 'ok', api: 'agent' });
 });
 
+agentApp.get('/messages', (req, res) => {
+  const search = req.query.search as string | undefined;
+  let messages = getMessages();
+  if (search) {
+    const term = search.toLowerCase();
+    messages = messages.filter(m => m.content.toLowerCase().includes(term));
+  }
+  res.json(messages);
+});
+
 // ===================
 // Public API (authenticated)
 // ===================
