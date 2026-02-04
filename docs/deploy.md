@@ -102,8 +102,8 @@ ClawChat uses QR-code invites for device authentication. No passwords, no email.
 ### Generate an Invite
 
 ```bash
-cd /opt/clawchat/server
-PUBLIC_URL=https://chat.example.com pnpm agent-invite
+cd /opt/clawchat
+BASE_URL=https://chat.example.com pnpm invite
 ```
 
 This prints a QR code + URL. Scan with phone or open the link. Invite expires in 5 minutes, one-time use.
