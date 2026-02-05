@@ -18,8 +18,19 @@ make logs         # Follow container logs
 ```
 
 Client: http://localhost:3102 (dev only, proxies to Public API)
-Agent API: http://127.0.0.1:3100 (container-internal only, use docker exec)
+Agent API: http://127.0.0.1:3100 (container-internal only, see below)
 Public API: http://127.0.0.1:3101 (nginx proxies to this in prod)
+
+## Agent API
+
+The Agent API is only accessible from inside the container. Use the helper script:
+
+```bash
+# Update a message (content from file via stdin - no escaping needed)
+cat /tmp/content.txt | ./scripts/update-message.sh <message-id>
+```
+
+See `docs/agent-api.md` for full API documentation.
 
 ## Project Structure
 

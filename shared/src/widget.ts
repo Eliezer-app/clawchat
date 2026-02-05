@@ -31,6 +31,7 @@ export const SSEEventType = {
   WIDGET_ERROR: 'widgetError',
   AGENT_STATUS: 'agentStatus',
   AGENT_TYPING: 'agentTyping',
+  SCROLL_TO_MESSAGE: 'scrollToMessage',
 } as const;
 
 export interface WidgetError {

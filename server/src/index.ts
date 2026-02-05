@@ -3,7 +3,7 @@ import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
 import cookieParser from 'cookie-parser';
-import { getMessages, addMessage, deleteMessage, updateMessage, getAppState, setAppState, getSessionByToken, createSession, deleteSession, getInvite, markInviteUsed, createPushSubscription, deletePushSubscription, setSessionVisibility, updateSessionActivity } from './db.js';
+import { getMessages, getMessage, addMessage, deleteMessage, updateMessage, getAppState, setAppState, getSessionByToken, createSession, deleteSession, getInvite, markInviteUsed, createPushSubscription, deletePushSubscription, setSessionVisibility, updateSessionActivity } from './db.js';
 import { initPush, getVapidPublicKey, sendPushToAll, isPushEnabled } from './push.js';
 import type { Message, Attachment, WidgetError } from '@clawchat/shared';
 import { SSEEventType } from '@clawchat/shared';
@@ -72,7 +72,7 @@ fs.mkdirSync(uploadsDir, { recursive: true });
 // Expand widget file references in message content
 // Transforms ```widget:path/to/file.html``` to ```widget\n<file contents>```
 function expandWidgetFiles(content: string): string {
-  return content.replace(/```widget:([^\n]+)\n?```/g, (_, filePath) => {
+  return content.replace(/```widget:([^\n`]+)\n?```/g, (_, filePath) => {
     const trimmedPath = filePath.trim();
     if (trimmedPath.includes('..') || !trimmedPath.endsWith('.html')) {
       return '```widget\n<!-- Invalid widget path -->\n```';
@@ -89,6 +89,12 @@ function expandWidgetFiles(content: string): string {
 
 function expandMessage(msg: Message): Message {
   return { ...msg, content: expandWidgetFiles(msg.content) };
+}
+
+// Count widgets in message content (max 1 allowed)
+function countWidgets(content: string): number {
+  const widgetRegex = /```widget(:[^\n`]+)?\n/g;
+  return (content.match(widgetRegex) || []).length;
 }
 
 // Configure multer for file uploads
@@ -157,15 +163,29 @@ agentApp.post('/send', (req, res) => {
     res.status(400).json({ error: 'Content required' });
     return;
   }
+  if (countWidgets(content) > 1) {
+    res.status(400).json({ error: 'Only one widget per message allowed' });
+    return;
+  }
   // Auto-clear typing indicator when agent sends a message
   broadcast({ type: SSEEventType.AGENT_TYPING, active: false });
-  const message = createMessage('agent', content);
+  const message = createMessage('agent', content.trim());
   res.json(message);
 });
 
 agentApp.post('/typing', (req, res) => {
   const { active } = req.body;
   broadcast({ type: SSEEventType.AGENT_TYPING, active: !!active });
+  res.json({ ok: true });
+});
+
+agentApp.post('/scroll', (req, res) => {
+  const { messageId } = req.body;
+  if (!messageId || typeof messageId !== 'string') {
+    res.status(400).json({ error: 'messageId required' });
+    return;
+  }
+  broadcast({ type: SSEEventType.SCROLL_TO_MESSAGE, messageId });
   res.json({ ok: true });
 });
 
@@ -188,7 +208,7 @@ agentApp.post('/upload', upload.single('file'), (req, res) => {
     };
   }
 
-  const message = createMessage('agent', content, attachment);
+  const message = createMessage('agent', content.trim(), attachment);
   res.json(message);
 });
 
@@ -210,7 +230,7 @@ agentApp.patch('/messages/:id', (req, res) => {
     res.status(400).json({ error: 'Content required' });
     return;
   }
-  const message = updateMessage(id, content);
+  const message = updateMessage(id, content.trim());
   if (!message) {
     res.status(404).json({ error: 'Message not found' });
     return;
@@ -485,6 +505,28 @@ publicApp.use('/api/files', express.static(uploadsDir));
 // Serve frontend static files (protected by auth middleware above)
 publicApp.use(express.static(clientDist));
 
+// Standalone widget endpoint - serves widget page by message ID
+publicApp.get('/api/widget/:messageId', (req, res) => {
+  const { messageId } = req.params;
+
+  const message = getMessage(messageId);
+  if (!message) {
+    res.status(404).json({ error: 'Message not found' });
+    return;
+  }
+
+  // Expand widget files
+  const expanded = expandMessage(message);
+
+  // Verify message has exactly one widget
+  if (countWidgets(expanded.content) !== 1) {
+    res.status(400).json({ error: 'Message does not contain exactly one widget' });
+    return;
+  }
+
+  res.json(expanded);
+});
+
 publicApp.get('/api/events', (req, res) => {
   res.setHeader('Content-Type', 'text/event-stream');
   res.setHeader('Cache-Control', 'no-cache');
@@ -516,7 +558,11 @@ publicApp.post('/api/messages', (req, res) => {
     res.status(400).json({ error: 'Content required' });
     return;
   }
-  const message = createMessage('user', content);
+  if (countWidgets(content) > 1) {
+    res.status(400).json({ error: 'Only one widget per message allowed' });
+    return;
+  }
+  const message = createMessage('user', content.trim());
   notifyAgent('user_message', {
     conversationId: message.conversationId,
     messageId: message.id,
@@ -699,6 +745,59 @@ const appActionHandlers: Map<string, AppActionHandler> = new Map();
 export function registerAppAction(action: string, handler: AppActionHandler) {
   appActionHandlers.set(action, handler);
 }
+
+// Mock weather data for widget APIs (keyed by lowercase city name)
+const mockWeatherData: Record<string, { temp: number; humidity: number; description: string; icon: string }> = {
+  // Globe widget capitals
+  'washington d.c.': { temp: 14, humidity: 60, description: 'Partly cloudy', icon: '⛅' },
+  'london': { temp: 9, humidity: 80, description: 'Rainy', icon: '🌧️' },
+  'paris': { temp: 11, humidity: 70, description: 'Overcast', icon: '☁️' },
+  'berlin': { temp: 7, humidity: 65, description: 'Cloudy', icon: '☁️' },
+  'tokyo': { temp: 18, humidity: 65, description: 'Partly cloudy', icon: '⛅' },
+  'canberra': { temp: 22, humidity: 45, description: 'Sunny', icon: '☀️' },
+  'brasilia': { temp: 26, humidity: 70, description: 'Warm', icon: '🌤️' },
+  'new delhi': { temp: 30, humidity: 55, description: 'Hot', icon: '🔥' },
+  'beijing': { temp: 8, humidity: 50, description: 'Hazy', icon: '🌫️' },
+  'moscow': { temp: -5, humidity: 75, description: 'Snow', icon: '❄️' },
+  'ottawa': { temp: -2, humidity: 70, description: 'Cold', icon: '❄️' },
+  'mexico city': { temp: 20, humidity: 50, description: 'Pleasant', icon: '🌤️' },
+  'rome': { temp: 16, humidity: 60, description: 'Mild', icon: '🌤️' },
+  'madrid': { temp: 18, humidity: 40, description: 'Clear', icon: '☀️' },
+  'cairo': { temp: 25, humidity: 35, description: 'Dry', icon: '☀️' },
+  'pretoria': { temp: 24, humidity: 50, description: 'Warm', icon: '🌤️' },
+  'buenos aires': { temp: 22, humidity: 65, description: 'Mild', icon: '🌤️' },
+  'seoul': { temp: 10, humidity: 55, description: 'Cool', icon: '🌤️' },
+  'ankara': { temp: 12, humidity: 45, description: 'Dry', icon: '☀️' },
+  'stockholm': { temp: 3, humidity: 75, description: 'Cold', icon: '❄️' },
+};
+
+registerAppAction('getWeather', ({ payload }) => {
+  const { city } = payload as { city?: string };
+  if (!city) {
+    return { error: 'City required' };
+  }
+  const key = city.toLowerCase().trim();
+  const data = mockWeatherData[key];
+  if (data) {
+    return { city, ...data };
+  }
+  // Return random weather for unknown cities
+  const temps = [5, 10, 15, 20, 25, 30];
+  const conditions = [
+    { description: 'Clear', icon: '☀️' },
+    { description: 'Cloudy', icon: '☁️' },
+    { description: 'Rainy', icon: '🌧️' },
+    { description: 'Windy', icon: '💨' },
+  ];
+  const temp = temps[Math.floor(Math.random() * temps.length)];
+  const condition = conditions[Math.floor(Math.random() * conditions.length)];
+  return {
+    city,
+    temp,
+    humidity: 50 + Math.floor(Math.random() * 30),
+    ...condition,
+  };
+});
 
 publicApp.post('/api/app-action/:conversationId/:appId', async (req, res) => {
   const { conversationId, appId } = req.params;

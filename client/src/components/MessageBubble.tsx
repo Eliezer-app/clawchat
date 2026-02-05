@@ -18,9 +18,8 @@ export default function MessageBubble(props: MessageBubbleProps) {
   const widgets = createMemo(() => extractWidgets(msg.content));
 
   const handleOpenWidget = () => {
-    const w = widgets();
-    if (w.length > 0) {
-      openWidgetInNewTab(w[0].code, msg.conversationId);
+    if (widgets().length === 1) {
+      openWidgetInNewTab(msg.id, msg.conversationId);
     }
   };
 
@@ -34,7 +33,7 @@ export default function MessageBubble(props: MessageBubbleProps) {
   const isAudio = (mimetype: string) => mimetype.startsWith('audio/');
 
   return (
-    <div class={`message ${msg.role}`}>
+    <div id={`msg-${msg.id}`} class={`message ${msg.role}`}>
       <div class="bubble">
         <button class="delete-btn" onClick={() => props.onDelete(msg.id)}>×</button>
         <Show when={widgets().length > 0}>

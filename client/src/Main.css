@@ -526,15 +526,31 @@ body {
 }
 
 .widget-container {
-  margin-top: 8px;
-  border-radius: 8px;
-  overflow: hidden;
-  background: #fff;
-  border: 1px solid #e0e0e0;
-  width: calc(100vw - 64px);
-  max-width: 720px;
+  margin-top: 24px;
+  margin-bottom: 8px;
   margin-left: -16px;
   margin-right: -16px;
+  border-radius: 8px;
+  overflow: hidden;
+  background: #1a1a1a;
+  border: none;
+  width: calc(100vw - 64px);
+  max-width: 720px;
+}
+
+/* Text before widget provides natural spacing */
+span + .widget-container {
+  margin-top: 0;
+}
+
+/* Widget is last element - flush with bubble bottom */
+.bubble > .widget-container:last-child {
+  margin-bottom: -12px;
+  border-radius: 0 0 18px 4px;
+}
+
+.message.user .bubble > .widget-container:last-child {
+  border-radius: 0 0 4px 18px;
 }
 
 .widget-iframe {

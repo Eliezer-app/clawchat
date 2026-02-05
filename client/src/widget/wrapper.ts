@@ -9,9 +9,15 @@ const CSS_RESET_BASE = `
 
 const CSS_RESET_IFRAME = CSS_RESET_BASE + `
   html, body { overflow: hidden; }
+  :root { --widget-layout: embedded; }
 `;
 
-// Shared widget API that both frameworks implement
+const CSS_RESET_FULLSCREEN = CSS_RESET_BASE + `
+  html, body { height: 100% !important; min-height: 100% !important; }
+  :root { --widget-layout: fullscreen; }
+`;
+
+// Shared widget API
 const WIDGET_API_SHARED = `
   const widget = window.widget = {};
   let stateCallback = null;
@@ -27,10 +33,12 @@ const WIDGET_API_SHARED = `
 `;
 
 // Framework for iframe - uses postMessage
-const WIDGET_FRAMEWORK_IFRAME = `
+function createWidgetFramework(mode: 'embedded' | 'fullscreen'): string {
+  return `
 (function() {
   'use strict';
 
+  const LAYOUT_MODE = '${mode}';
   let lastHeight = 0;
   let requestId = 0;
   const pendingRequests = new Map();
@@ -75,7 +83,13 @@ const WIDGET_FRAMEWORK_IFRAME = `
         if (type === '${WidgetMessageType.RESPONSE}' && pendingRequests.has(id)) {
           const { resolve, reject } = pendingRequests.get(id);
           pendingRequests.delete(id);
-          error ? reject(new Error(error)) : resolve(data);
+          if (error) {
+            reject(new Error(error));
+          } else if (data && !data.ok) {
+            reject(new Error(data.error || 'Request failed'));
+          } else {
+            resolve(data?.result);
+          }
         }
 
         if (type === '${WidgetMessageType.STATE_UPDATED}' && appId && trackedAppIds.has(appId)) {
@@ -124,6 +138,7 @@ const WIDGET_FRAMEWORK_IFRAME = `
     };
 
     function init() {
+      document.body.classList.add('widget-' + LAYOUT_MODE);
       setupResizeObserver();
       reportHeight();
     }
@@ -138,115 +153,6 @@ const WIDGET_FRAMEWORK_IFRAME = `
     window.addEventListener('load', () => reportHeight());
 
     // Catch unhandled errors
-    window.onerror = function(msg, url, line, col, err) {
-      reportError(msg + ' at line ' + line, err?.stack);
-    };
-    window.onunhandledrejection = function(e) {
-      reportError('Unhandled promise rejection: ' + e.reason, e.reason?.stack);
-    };
-
-  } catch (err) {
-    reportError('Widget initialization error: ' + err.message, err.stack);
-  }
-})();
-`;
-
-// Framework for standalone tab - uses fetch directly
-function createStandaloneFramework(baseUrl: string, conversationId: string): string {
-  return `
-(function() {
-  'use strict';
-
-  const BASE_URL = ${JSON.stringify(baseUrl)};
-  const CONVERSATION_ID = ${JSON.stringify(conversationId)};
-
-  function reportError(message, stack) {
-    fetch(BASE_URL + '${WidgetApi.widgetError('')}' + CONVERSATION_ID, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ error: message, stack: stack || new Error().stack })
-    }).catch(() => {});
-    console.error('[Widget Error]', message);
-  }
-
-  try {
-    ${WIDGET_API_SHARED}
-
-    function connectSSE() {
-      const events = new EventSource(BASE_URL + '${WidgetApi.events}');
-      events.onmessage = (e) => {
-        try {
-          const data = JSON.parse(e.data);
-          if (data.type === '${WidgetMessageType.STATE_UPDATED}' &&
-              data.conversationId === CONVERSATION_ID &&
-              trackedAppIds.has(data.appId)) {
-            widget.getState(data.appId);
-          }
-        } catch (err) {
-          reportError('SSE message parse error: ' + err.message, err.stack);
-        }
-      };
-      events.onerror = () => {
-        events.close();
-        setTimeout(connectSSE, 3000);
-      };
-    }
-    connectSSE();
-
-    widget.getState = async function(appId) {
-      if (!appId || typeof appId !== 'string') {
-        reportError('getState: appId must be a non-empty string');
-        return;
-      }
-      trackedAppIds.add(appId);
-      try {
-        const res = await fetch(BASE_URL + '/api/app-state/' + CONVERSATION_ID + '/' + encodeURIComponent(appId));
-        const data = res.ok ? await res.json() : null;
-        if (stateCallback) stateCallback(data?.state || null);
-      } catch (err) {
-        reportError('getState failed: ' + err.message, err.stack);
-        if (stateCallback) stateCallback(null);
-      }
-    };
-
-    widget.setState = async function(appId, state) {
-      if (!appId || typeof appId !== 'string') {
-        reportError('setState: appId must be a non-empty string');
-        return;
-      }
-      try {
-        await fetch(BASE_URL + '/api/app-state/' + CONVERSATION_ID + '/' + encodeURIComponent(appId), {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ state })
-        });
-      } catch (err) {
-        reportError('setState failed: ' + err.message, err.stack);
-      }
-    };
-
-    widget.request = async function(appId, action, payload) {
-      if (!appId || typeof appId !== 'string') {
-        throw new Error('request: appId must be a non-empty string');
-      }
-      if (!action || typeof action !== 'string') {
-        throw new Error('request: action must be a non-empty string');
-      }
-      try {
-        const res = await fetch(BASE_URL + '/api/app-action/' + CONVERSATION_ID + '/' + encodeURIComponent(appId), {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ action, payload })
-        });
-        const data = await res.json();
-        if (!data.ok) throw new Error(data.error || 'Request failed');
-        return data.result;
-      } catch (err) {
-        reportError('request failed: ' + err.message, err.stack);
-        throw err;
-      }
-    };
-
     window.onerror = function(msg, url, line, col, err) {
       reportError(msg + ' at line ' + line, err?.stack);
     };
@@ -289,17 +195,8 @@ ${html}
 }
 
 // Wrap widget HTML for iframe embedding
-export function wrapWidgetHtml(html: string): string {
-  return injectIntoHtml(html, CSS_RESET_IFRAME, WIDGET_FRAMEWORK_IFRAME);
-}
-
-// Wrap widget HTML for standalone tab viewing
-export function wrapWidgetHtmlStandalone(html: string, conversationId: string): string {
-  const baseUrl = window.location.origin;
-  const js = createStandaloneFramework(baseUrl, conversationId);
-
-  // Remove overflow:hidden for standalone (allow scrolling)
-  let processed = html.replace(/overflow:\s*hidden;?/gi, '');
-
-  return injectIntoHtml(processed, CSS_RESET_BASE, js);
+// mode: 'embedded' (default) = overflow hidden, 'fullscreen' = fill viewport
+export function wrapWidgetHtml(html: string, mode: 'embedded' | 'fullscreen' = 'embedded'): string {
+  const css = mode === 'fullscreen' ? CSS_RESET_FULLSCREEN : CSS_RESET_IFRAME;
+  return injectIntoHtml(html, css, createWidgetFramework(mode));
 }

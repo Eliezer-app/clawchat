@@ -92,6 +92,15 @@ export function getMessages(): Message[] {
   }));
 }
 
+export function getMessage(id: string): Message | null {
+  const row = db.prepare('SELECT * FROM messages WHERE id = ?').get(id) as DbMessage | undefined;
+  if (!row) return null;
+  return {
+    ...row,
+    attachment: row.attachment ? JSON.parse(row.attachment) as Attachment : undefined,
+  };
+}
+
 export function addMessage(message: Message): Message {
   const stmt = db.prepare('INSERT INTO messages (id, conversationId, role, content, attachment, createdAt) VALUES (?, ?, ?, ?, ?, ?)');
   stmt.run(

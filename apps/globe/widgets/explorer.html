@@ -3,18 +3,31 @@
 <head>
   <meta charset="utf-8">
   <style>
-    body { height: 450px; background: #0a0a1a; }
+    body { margin: 0; padding: 0; background: #0a0a1a; }
+    body.widget-fullscreen { height: 100%; }
+    #globe-container { position: relative; width: 100%; height: 450px; }
+    body.widget-fullscreen #globe-container { width: 100%; height: 100%; }
     #info { position: absolute; bottom: 16px; left: 50%; transform: translateX(-50%); color: #fff; font-family: system-ui; font-size: 18px; text-align: center; text-shadow: 0 2px 8px rgba(0,0,0,0.9); }
+    #weather { position: absolute; top: 12px; left: 12px; color: #fff; font-family: system-ui; font-size: 14px; background: rgba(0,0,0,0.5); padding: 8px 12px; border-radius: 8px; min-width: 120px; }
+    #weather .temp { font-size: 28px; font-weight: bold; }
+    #weather .icon { font-size: 24px; margin-right: 4px; }
+    #weather .desc { opacity: 0.8; font-size: 12px; }
     .btn { position: absolute; top: 12px; background: rgba(255,255,255,0.15); border: none; color: #fff; padding: 8px 12px; border-radius: 6px; cursor: pointer; font-family: system-ui; font-size: 14px; }
     .btn:hover { background: rgba(255,255,255,0.25); }
     #reset { right: 12px; }
   </style>
 </head>
 <body>
-  <button id="reset" class="btn">↑ North</button>
-  <div id="info"></div>
+  <div id="globe-container">
+    <div id="weather"></div>
+    <button id="reset" class="btn">↑ North</button>
+    <div id="info"></div>
+  </div>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
   <script>
+    // Detect layout mode via CSS variable (set before JS runs)
+    const isFullscreen = getComputedStyle(document.documentElement).getPropertyValue('--widget-layout').trim() === 'fullscreen';
+
     const countries = [
       { name: "United States", capital: "Washington D.C.", lat: 38.9, lon: -77.0 },
       { name: "United Kingdom", capital: "London", lat: 51.5, lon: -0.1 },
@@ -38,13 +51,32 @@
       { name: "Sweden", capital: "Stockholm", lat: 59.3, lon: 18.1 }
     ];
 
-    const W = window.innerWidth, H = 450;
+    const container = document.getElementById('globe-container');
+
+    function getSize() {
+      if (isFullscreen) {
+        return { w: window.innerWidth, h: window.innerHeight };
+      }
+      return { w: container.clientWidth || window.innerWidth, h: 450 };
+    }
+
+    const { w: W, h: H } = getSize();
     const scene = new THREE.Scene();
     const camera = new THREE.PerspectiveCamera(45, W / H, 0.1, 1000);
     const renderer = new THREE.WebGLRenderer({ antialias: true });
     renderer.setSize(W, H);
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-    document.body.appendChild(renderer.domElement);
+    container.appendChild(renderer.domElement);
+
+    // Handle resize in fullscreen mode
+    if (isFullscreen) {
+      window.addEventListener('resize', () => {
+        const { w, h } = getSize();
+        camera.aspect = w / h;
+        camera.updateProjectionMatrix();
+        renderer.setSize(w, h);
+      });
+    }
 
     const earth = new THREE.Mesh(
       new THREE.SphereGeometry(2, 64, 64),
@@ -59,17 +91,30 @@
     // Atmosphere glow
     scene.add(new THREE.Mesh(new THREE.SphereGeometry(2.1, 64, 64), new THREE.MeshBasicMaterial({ color: 0x4488ff, transparent: true, opacity: 0.1, side: THREE.BackSide })));
 
-    // Target reticle in front of globe
+    // Target reticle in front of globe - clean crosshair
     const targetGroup = new THREE.Group();
-    const ringGeo = new THREE.RingGeometry(0.18, 0.22, 32);
-    const ringMat = new THREE.MeshBasicMaterial({ color: 0xff3333, side: THREE.DoubleSide });
-    const ring = new THREE.Mesh(ringGeo, ringMat);
-    targetGroup.add(ring);
-    // Crosshair lines
-    const lineMat = new THREE.MeshBasicMaterial({ color: 0xff3333 });
-    const hBar = new THREE.Mesh(new THREE.PlaneGeometry(0.5, 0.03), lineMat);
-    const vBar = new THREE.Mesh(new THREE.PlaneGeometry(0.03, 0.5), lineMat);
-    targetGroup.add(hBar, vBar);
+    const targetMat = new THREE.MeshBasicMaterial({ color: 0x00ffff, transparent: true, opacity: 0.9 });
+
+    // Four straight lines with gap in center
+    const lineLen = 0.15;
+    const lineThick = 0.012;
+    const gap = 0.06;
+
+    const lineTop = new THREE.Mesh(new THREE.PlaneGeometry(lineThick, lineLen), targetMat);
+    lineTop.position.set(0, gap + lineLen/2, 0);
+    const lineBottom = new THREE.Mesh(new THREE.PlaneGeometry(lineThick, lineLen), targetMat);
+    lineBottom.position.set(0, -gap - lineLen/2, 0);
+    const lineLeft = new THREE.Mesh(new THREE.PlaneGeometry(lineLen, lineThick), targetMat);
+    lineLeft.position.set(-gap - lineLen/2, 0, 0);
+    const lineRight = new THREE.Mesh(new THREE.PlaneGeometry(lineLen, lineThick), targetMat);
+    lineRight.position.set(gap + lineLen/2, 0, 0);
+
+    targetGroup.add(lineTop, lineBottom, lineLeft, lineRight);
+
+    // Center dot
+    const dot = new THREE.Mesh(new THREE.CircleGeometry(0.015, 16), targetMat);
+    targetGroup.add(dot);
+
     targetGroup.position.set(0, 0.15, 2.5);
     scene.add(targetGroup);
 
@@ -99,6 +144,38 @@
     let animatingToNorth = false;
     let targetQuaternion = null;
     const autoRotationSpeed = 0.003;
+
+    // Weather state
+    const APP_ID = 'globe-explorer';
+    let currentCountry = null;
+    let weatherCache = {};
+
+    async function fetchWeather(capital) {
+      if (weatherCache[capital]) {
+        displayWeather(weatherCache[capital]);
+        return;
+      }
+      try {
+        const result = await widget.request(APP_ID, 'getWeather', { city: capital });
+        if (result && !result.error) {
+          weatherCache[capital] = result;
+          displayWeather(result);
+        }
+      } catch (e) {
+        console.error('Weather fetch failed:', e);
+      }
+    }
+
+    function displayWeather(w) {
+      document.getElementById('weather').innerHTML =
+        '<span class="icon">' + w.icon + '</span>' +
+        '<span class="temp">' + w.temp + '°</span>' +
+        '<div class="desc">' + w.description + '</div>';
+    }
+
+    function clearWeather() {
+      document.getElementById('weather').innerHTML = '';
+    }
 
     function applyRotation(deltaX, deltaY) {
       const quaternionX = new THREE.Quaternion();
@@ -169,8 +246,19 @@
       }
 
       const c = findCountry();
-      if (c) document.getElementById('info').innerHTML = '<strong>' + c.name + '</strong><br><span style="font-size:14px;opacity:0.8">' + c.capital + '</span>';
-      else document.getElementById('info').innerHTML = '';
+      if (c) {
+        document.getElementById('info').innerHTML = '<strong>' + c.name + '</strong><br><span style="font-size:14px;opacity:0.8">' + c.capital + '</span>';
+        if (currentCountry !== c.capital) {
+          currentCountry = c.capital;
+          fetchWeather(c.capital);
+        }
+      } else {
+        document.getElementById('info').innerHTML = '';
+        if (currentCountry !== null) {
+          currentCountry = null;
+          clearWeather();
+        }
+      }
       renderer.render(scene, camera);
     }
     animate();

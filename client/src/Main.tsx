@@ -129,6 +129,9 @@ export default function Main() {
             case SSEEventType.AGENT_TYPING:
               setAgentTyping(data.active);
               break;
+            case SSEEventType.SCROLL_TO_MESSAGE:
+              document.getElementById(`msg-${data.messageId}`)?.scrollIntoView({ behavior: 'instant', block: 'center' });
+              break;
           }
         } catch (err) {
           console.error('SSE parse error:', err);
@@ -174,7 +177,7 @@ export default function Main() {
     return parts.map((part) =>
       urlRegex.test(part)
         ? <a href={part} target="_blank" rel="noopener noreferrer" class="message-link">{part}</a>
-        : part
+        : <span>{part}</span>
     ) as JSX.Element[];
   };
 
