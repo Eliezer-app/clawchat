@@ -1,4 +1,4 @@
-.PHONY: dev build typecheck lint clean install
+.PHONY: dev build typecheck lint clean install setup-push
 
 # Development
 dev:
@@ -46,3 +46,22 @@ shell-server:
 clean:
 	docker compose down
 	rm -rf client/dist server/dist
+
+# Setup push notifications (generate VAPID keys and add to .env)
+setup-push:
+	@if [ -f .env ] && grep -q "VAPID_PUBLIC_KEY" .env; then \
+		echo "VAPID keys already exist in .env"; \
+	else \
+		echo "Generating VAPID keys..."; \
+		KEYS=$$(docker compose exec server npx web-push generate-vapid-keys --json 2>/dev/null); \
+		PUBLIC=$$(echo "$$KEYS" | grep -o '"publicKey":"[^"]*"' | cut -d'"' -f4); \
+		PRIVATE=$$(echo "$$KEYS" | grep -o '"privateKey":"[^"]*"' | cut -d'"' -f4); \
+		echo "" >> .env; \
+		echo "# Push notification VAPID keys" >> .env; \
+		echo "VAPID_PUBLIC_KEY=$$PUBLIC" >> .env; \
+		echo "VAPID_PRIVATE_KEY=$$PRIVATE" >> .env; \
+		echo "VAPID_SUBJECT=mailto:admin@localhost" >> .env; \
+		echo "VAPID keys added to .env"; \
+		echo "Restarting server..."; \
+		docker compose restart server; \
+	fi

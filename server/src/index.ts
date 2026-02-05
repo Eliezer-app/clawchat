@@ -3,7 +3,8 @@ import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
 import cookieParser from 'cookie-parser';
-import { getMessages, addMessage, deleteMessage, updateMessage, getAppState, setAppState, getSessionByToken, createSession, deleteSession, getInvite, markInviteUsed } from './db.js';
+import { getMessages, addMessage, deleteMessage, updateMessage, getAppState, setAppState, getSessionByToken, createSession, deleteSession, getInvite, markInviteUsed, createPushSubscription, deletePushSubscription } from './db.js';
+import { initPush, getVapidPublicKey, sendPushToAll, isPushEnabled } from './push.js';
 import type { Message, Attachment, WidgetError } from '@clawchat/shared';
 import { SSEEventType } from '@clawchat/shared';
 
@@ -128,6 +129,18 @@ function createMessage(role: Message['role'], content: string, attachment?: Atta
     createdAt: new Date().toISOString(),
   });
   broadcast({ type: 'message', message: expandMessage(message) });
+
+  // Send push notification for agent messages
+  if (role === 'agent' && isPushEnabled()) {
+    const preview = content.length > 100 ? content.slice(0, 100) + '...' : content;
+    sendPushToAll({
+      title: 'ClawChat',
+      body: preview,
+      tag: 'clawchat-message',
+      data: { messageId: message.id },
+    }).catch((err) => console.error('[Push] Error sending notifications:', err));
+  }
+
   return message;
 }
 
@@ -330,6 +343,61 @@ publicApp.post('/api/auth/logout', (req, res) => {
 // Health check (public)
 publicApp.get('/api/health', (req, res) => {
   res.json({ status: 'ok', api: 'public' });
+});
+
+// ===================
+// Push notification endpoints
+// ===================
+
+// Get VAPID public key (public - needed before auth for service worker)
+publicApp.get('/api/push/vapid-public-key', (req, res) => {
+  const key = getVapidPublicKey();
+  if (!key) {
+    res.status(503).json({ error: 'Push notifications not configured' });
+    return;
+  }
+  res.json({ publicKey: key });
+});
+
+// Subscribe to push notifications (requires auth)
+publicApp.post('/api/push/subscribe', (req, res) => {
+  if (!isAuthenticated(req)) {
+    res.status(401).json({ error: 'Unauthorized' });
+    return;
+  }
+
+  const { endpoint, keys } = req.body;
+  if (!endpoint || !keys?.p256dh || !keys?.auth) {
+    res.status(400).json({ error: 'Invalid subscription' });
+    return;
+  }
+
+  const sessionToken = req.cookies?.session;
+  const session = getSessionByToken(sessionToken);
+  if (!session) {
+    res.status(401).json({ error: 'Invalid session' });
+    return;
+  }
+
+  createPushSubscription(session.id, endpoint, keys.p256dh, keys.auth);
+  res.json({ ok: true });
+});
+
+// Unsubscribe from push notifications (requires auth)
+publicApp.delete('/api/push/subscribe', (req, res) => {
+  if (!isAuthenticated(req)) {
+    res.status(401).json({ error: 'Unauthorized' });
+    return;
+  }
+
+  const { endpoint } = req.body;
+  if (!endpoint) {
+    res.status(400).json({ error: 'Endpoint required' });
+    return;
+  }
+
+  deletePushSubscription(endpoint);
+  res.json({ ok: true });
 });
 
 // Invite landing page (public)
@@ -573,6 +641,10 @@ publicApp.get('*', (req, res) => {
 // ===================
 // Start servers
 // ===================
+
+// Initialize push notifications
+initPush();
+
 agentApp.listen(Number(agentPort), '127.0.0.1', () => {
   console.log(`Agent API running on 127.0.0.1:${agentPort}`);
 });

@@ -229,3 +229,54 @@ export function cleanExpiredInvites(): number {
   const result = db.prepare('DELETE FROM invites WHERE expiresAt < ?').run(new Date().toISOString());
   return result.changes;
 }
+
+// ===================
+// Push Subscriptions
+// ===================
+
+db.exec(`
+  CREATE TABLE IF NOT EXISTS push_subscriptions (
+    id TEXT PRIMARY KEY,
+    sessionId TEXT NOT NULL,
+    endpoint TEXT UNIQUE NOT NULL,
+    p256dh TEXT NOT NULL,
+    auth TEXT NOT NULL,
+    createdAt TEXT NOT NULL
+  )
+`);
+
+export interface PushSubscription {
+  id: string;
+  sessionId: string;
+  endpoint: string;
+  p256dh: string;
+  auth: string;
+  createdAt: string;
+}
+
+export function createPushSubscription(sessionId: string, endpoint: string, p256dh: string, auth: string): PushSubscription {
+  const id = crypto.randomUUID();
+  const createdAt = new Date().toISOString();
+
+  // Upsert - if endpoint exists, update it
+  db.prepare(`
+    INSERT INTO push_subscriptions (id, sessionId, endpoint, p256dh, auth, createdAt)
+    VALUES (?, ?, ?, ?, ?, ?)
+    ON CONFLICT(endpoint) DO UPDATE SET
+      sessionId = excluded.sessionId,
+      p256dh = excluded.p256dh,
+      auth = excluded.auth,
+      createdAt = excluded.createdAt
+  `).run(id, sessionId, endpoint, p256dh, auth, createdAt);
+
+  return { id, sessionId, endpoint, p256dh, auth, createdAt };
+}
+
+export function getAllPushSubscriptions(): PushSubscription[] {
+  return db.prepare('SELECT * FROM push_subscriptions').all() as PushSubscription[];
+}
+
+export function deletePushSubscription(endpoint: string): boolean {
+  const result = db.prepare('DELETE FROM push_subscriptions WHERE endpoint = ?').run(endpoint);
+  return result.changes > 0;
+}

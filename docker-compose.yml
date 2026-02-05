@@ -14,6 +14,9 @@ services:
       - AGENT_URL=http://127.0.0.1:3200
       - FAKE_AGENT_PORT=3200
       - FAKE_AGENT_CHAT_URL=http://127.0.0.1:3100
+      - VAPID_PUBLIC_KEY=${VAPID_PUBLIC_KEY:-}
+      - VAPID_PRIVATE_KEY=${VAPID_PRIVATE_KEY:-}
+      - VAPID_SUBJECT=${VAPID_SUBJECT:-mailto:admin@localhost}
     ports:
       - "3100:3100"
       - "3101:3101"

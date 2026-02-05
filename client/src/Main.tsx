@@ -6,7 +6,7 @@ import Widget from './components/Widget';
 import MessageBubble from './components/MessageBubble';
 import InputArea from './components/InputArea';
 import Lightbox from './components/Lightbox';
-import SettingsModal from './components/SettingsModal';
+import SettingsModal, { useShouldPromptNotifications } from './components/SettingsModal';
 import { AuthChecking, AuthLocked } from './components/AuthScreens';
 import Toast from './components/Toast';
 import './Main.css';
@@ -19,6 +19,7 @@ export default function Main() {
   const [agentConnected, setAgentConnected] = createSignal(true);
   const [agentTyping, setAgentTyping] = createSignal(false);
   const [toast, setToast] = createSignal<string | null>(null);
+  const { shouldPrompt: shouldPromptNotifications, dismiss: dismissNotificationPrompt } = useShouldPromptNotifications();
 
   let messagesContainer: HTMLDivElement | undefined;
 
@@ -220,8 +221,15 @@ export default function Main() {
               <button class="settings-btn" onClick={() => setShowSettings(true)}>⚙</button>
             </header>
 
-            <Show when={showSettings()}>
-              <SettingsModal onClose={() => setShowSettings(false)} onLogout={logout} />
+            <Show when={showSettings() || shouldPromptNotifications()}>
+              <SettingsModal
+                onClose={() => {
+                  setShowSettings(false);
+                  dismissNotificationPrompt();
+                }}
+                onLogout={logout}
+                initialTab="notifications"
+              />
             </Show>
 
             <div class="messages" ref={messagesContainer}>

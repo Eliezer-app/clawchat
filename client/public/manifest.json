@@ -1,0 +1,17 @@
+{
+  "name": "ClawChat",
+  "short_name": "ClawChat",
+  "description": "Chat with your AI agent",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#1a1a2e",
+  "theme_color": "#667eea",
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}

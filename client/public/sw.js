@@ -1,0 +1,77 @@
+// ClawChat Service Worker for Push Notifications
+
+self.addEventListener('install', () => {
+  self.skipWaiting();
+});
+
+self.addEventListener('activate', (event) => {
+  event.waitUntil(clients.claim());
+});
+
+self.addEventListener('push', (event) => {
+  if (!event.data) return;
+
+  let payload;
+  try {
+    payload = event.data.json();
+  } catch {
+    payload = { title: 'ClawChat', body: event.data.text() };
+  }
+
+  const options = {
+    body: payload.body || 'New message',
+    icon: '/icon.svg',
+    badge: '/icon.svg',
+    tag: payload.tag || 'clawchat-message',
+    renotify: true,
+    requireInteraction: true,
+    data: payload.data || {},
+  };
+
+  event.waitUntil(self.registration.showNotification(payload.title || 'ClawChat', options));
+});
+
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close();
+
+  // Open/focus the app
+  event.waitUntil(clients.openWindow('/'));
+});
+
+self.addEventListener('pushsubscriptionchange', (event) => {
+  // Re-subscribe automatically when subscription expires
+  event.waitUntil(
+    (async () => {
+      try {
+        const response = await fetch('/api/push/vapid-public-key');
+        if (!response.ok) return;
+
+        const { publicKey } = await response.json();
+        const subscription = await self.registration.pushManager.subscribe({
+          userVisibleOnly: true,
+          applicationServerKey: urlBase64ToUint8Array(publicKey),
+        });
+
+        await fetch('/api/push/subscribe', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(subscription.toJSON()),
+          credentials: 'include',
+        });
+      } catch (err) {
+        console.error('[SW] Failed to re-subscribe:', err);
+      }
+    })()
+  );
+});
+
+function urlBase64ToUint8Array(base64String) {
+  const padding = '='.repeat((4 - (base64String.length % 4)) % 4);
+  const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
+  const rawData = atob(base64);
+  const outputArray = new Uint8Array(rawData.length);
+  for (let i = 0; i < rawData.length; i++) {
+    outputArray[i] = rawData.charCodeAt(i);
+  }
+  return outputArray;
+}
