@@ -2,7 +2,7 @@ services:
   server:
     image: node:20-alpine
     working_dir: /opt/clawchat
-    command: sh -c "corepack enable && pnpm install && pnpm --filter @clawchat/server dev"
+    command: sh -c "corepack enable && pnpm install && (pnpm --filter @clawchat/fake-agent dev &) && pnpm --filter @clawchat/server dev"
     environment:
       - PUBLIC_HOST=0.0.0.0
       - AGENT_PORT=3100
@@ -11,6 +11,9 @@ services:
       - UPLOADS_DIR=/opt/clawchat/server/data/uploads
       - APPS_DIR=/opt/clawchat/apps
       - CLIENT_DIST=/opt/clawchat/client/dist
+      - AGENT_URL=http://127.0.0.1:3200
+      - FAKE_AGENT_PORT=3200
+      - FAKE_AGENT_CHAT_URL=http://127.0.0.1:3100
     ports:
       - "3100:3100"
       - "3101:3101"

@@ -8,6 +8,7 @@ import InputArea from './components/InputArea';
 import Lightbox from './components/Lightbox';
 import SettingsModal from './components/SettingsModal';
 import { AuthChecking, AuthLocked } from './components/AuthScreens';
+import Toast from './components/Toast';
 import './Main.css';
 
 export default function Main() {
@@ -15,6 +16,9 @@ export default function Main() {
   const [messages, setMessages] = createSignal<Message[]>([]);
   const [lightbox, setLightbox] = createSignal<{ src: string; filename: string } | null>(null);
   const [showSettings, setShowSettings] = createSignal(false);
+  const [agentConnected, setAgentConnected] = createSignal(true);
+  const [agentTyping, setAgentTyping] = createSignal(false);
+  const [toast, setToast] = createSignal<string | null>(null);
 
   let messagesContainer: HTMLDivElement | undefined;
 
@@ -29,9 +33,10 @@ export default function Main() {
     }
   };
 
-  // Auto-scroll to bottom when new messages arrive
+  // Auto-scroll to bottom when new messages arrive or typing indicator shows
   createEffect(() => {
     messages();
+    agentTyping();
     if (messagesContainer) {
       messagesContainer.scrollTop = messagesContainer.scrollHeight;
     }
@@ -103,6 +108,17 @@ export default function Main() {
               window.dispatchEvent(new CustomEvent('appStateUpdated', {
                 detail: { conversationId: data.conversationId, appId: data.appId }
               }));
+              break;
+            case SSEEventType.AGENT_STATUS:
+              // Only show toast on state change
+              if (agentConnected() !== data.connected) {
+                setAgentConnected(data.connected);
+                setToast(data.connected ? 'Agent connected' : `Agent offline: ${data.error || 'Connection failed'}`);
+                setTimeout(() => setToast(null), 4000);
+              }
+              break;
+            case SSEEventType.AGENT_TYPING:
+              setAgentTyping(data.active);
               break;
           }
         } catch (err) {
@@ -195,7 +211,7 @@ export default function Main() {
       <Match when={authState() === 'authenticated'}>
         <>
           <div class="app">
-            <header class="header">
+            <header class={`header ${agentConnected() ? '' : 'agent-offline'}`}>
               <span class="header-title">ClawChat</span>
               <button class="settings-btn" onClick={() => setShowSettings(true)}>⚙</button>
             </header>
@@ -219,6 +235,15 @@ export default function Main() {
                   )}
                 </For>
               )}
+              <Show when={agentTyping()}>
+                <div class="message agent">
+                  <div class="bubble typing-indicator">
+                    <span class="dot"></span>
+                    <span class="dot"></span>
+                    <span class="dot"></span>
+                  </div>
+                </div>
+              </Show>
             </div>
 
             <InputArea onSend={handleSend} />
@@ -233,6 +258,8 @@ export default function Main() {
               />
             )}
           </Show>
+
+          <Toast message={toast()} type={agentConnected() ? 'success' : 'error'} />
         </>
       </Match>
     </Switch>

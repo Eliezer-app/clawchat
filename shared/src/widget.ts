@@ -29,6 +29,8 @@ export const SSEEventType = {
   UPDATE: 'update',
   APP_STATE_UPDATED: 'appStateUpdated',
   WIDGET_ERROR: 'widgetError',
+  AGENT_STATUS: 'agentStatus',
+  AGENT_TYPING: 'agentTyping',
 } as const;
 
 export interface WidgetError {

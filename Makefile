@@ -6,14 +6,14 @@ dev:
 
 # Type checking
 typecheck:
-	docker compose exec -w /app/client client pnpm exec tsc --noEmit
-	docker compose exec -w /app/server server pnpm exec tsc --noEmit
+	docker compose exec -w /opt/clawchat/client client pnpm exec tsc --noEmit
+	docker compose exec -w /opt/clawchat/server server pnpm exec tsc --noEmit
 
 typecheck-client:
-	docker compose exec -w /app/client client pnpm exec tsc --noEmit
+	docker compose exec -w /opt/clawchat/client client pnpm exec tsc --noEmit
 
 typecheck-server:
-	docker compose exec -w /app/server server pnpm exec tsc --noEmit
+	docker compose exec -w /opt/clawchat/server server pnpm exec tsc --noEmit
 
 # Build
 build:
