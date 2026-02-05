@@ -4,13 +4,18 @@
 
 Implement Web Push for message notifications when the tab is closed.
 
-- [ ] Generate VAPID keys (server-side)
-- [ ] Service worker for push handling
-- [ ] `PushSubscription` table (endpoint, keys, sessionId)
-- [ ] Subscribe UI in settings
-- [ ] Server sends push on new agent messages
+- [x] Generate VAPID keys (server-side)
+- [x] Service worker for push handling
+- [x] `PushSubscription` table (endpoint, keys, sessionId)
+- [x] Subscribe UI in settings
+- [x] Server sends push on new agent messages
+- [x] Suppress notifications when window is focused
+- [x] Token login form for PWA authentication
 
 Scope: Chrome only (uses standard Web Push API).
+
+Known issues:
+- macOS 15 + Chrome: `notificationclick` doesn't work with `requireInteraction: true` (Chromium bug #370536109)
 
 ## Agent Typing Indicator
 
