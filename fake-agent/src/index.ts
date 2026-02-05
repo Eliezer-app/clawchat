@@ -1,3 +1,4 @@
+import 'express-async-errors';
 import express from 'express';
 
 const app = express();
@@ -9,34 +10,45 @@ app.post('/events', async (req, res) => {
   const { source, type, payload } = req.body;
   console.log(`[Agent] Event: ${source}/${type}`);
 
-  res.json({ ok: true });
-
   if (source === 'chat' && type === 'user_message') {
     // Set typing indicator
     console.log(`[Agent] Calling ${CHAT_URL}/typing`);
-    const typingRes = await fetch(`${CHAT_URL}/typing`, {
+    await fetch(`${CHAT_URL}/typing`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ active: true }),
     });
-    console.log(`[Agent] Typing response: ${typingRes.status}`);
+
+    // Crash if message is "crash"
+    if (payload.content === 'crash') {
+      console.log('[Agent] Crashing in 1s...');
+      await new Promise(r => setTimeout(r, 1000));
+      throw new Error('Agent crashed on purpose');
+    }
 
     // Wait 3 seconds
     await new Promise(r => setTimeout(r, 3000));
 
     // Echo the message back
     console.log(`[Agent] Calling ${CHAT_URL}/send`);
-    const sendRes = await fetch(`${CHAT_URL}/send`, {
+    await fetch(`${CHAT_URL}/send`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ content: `Echo: ${payload.content}` }),
     });
-    console.log(`[Agent] Send response: ${sendRes.status}`);
   }
+
+  res.json({ ok: true });
 });
 
 app.get('/health', (req, res) => {
   res.json({ status: 'ok' });
+});
+
+// Error handler - return JSON instead of HTML
+app.use((err: Error, req: express.Request, res: express.Response, next: express.NextFunction) => {
+  console.error('[Agent] Error:', err.message);
+  res.status(500).json({ error: err.message });
 });
 
 const port = process.env.FAKE_AGENT_PORT || 3200;

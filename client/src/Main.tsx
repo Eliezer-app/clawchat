@@ -110,10 +110,14 @@ export default function Main() {
               }));
               break;
             case SSEEventType.AGENT_STATUS:
-              // Only show toast on state change
-              if (agentConnected() !== data.connected) {
-                setAgentConnected(data.connected);
-                setToast(data.connected ? 'Agent connected' : `Agent offline: ${data.error || 'Connection failed'}`);
+              const wasConnected = agentConnected();
+              setAgentConnected(data.connected);
+              // Show toast on state change, or on new error while already disconnected
+              if (data.connected && !wasConnected) {
+                setToast('Agent connected');
+                setTimeout(() => setToast(null), 4000);
+              } else if (!data.connected && (wasConnected || data.error)) {
+                setToast(`Agent offline: ${data.error || 'Connection failed'}`);
                 setTimeout(() => setToast(null), 4000);
               }
               break;

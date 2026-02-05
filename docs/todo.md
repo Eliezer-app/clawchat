@@ -4,12 +4,11 @@
 
 Implement Web Push for message notifications when the tab is closed.
 
-Requirements:
-- Generate VAPID keys (server-side)
-- Service worker for push handling
-- `PushSubscription` table (endpoint, keys, sessionId)
-- Subscribe UI in settings
-- Server sends push on new agent messages
+- [ ] Generate VAPID keys (server-side)
+- [ ] Service worker for push handling
+- [ ] `PushSubscription` table (endpoint, keys, sessionId)
+- [ ] Subscribe UI in settings
+- [ ] Server sends push on new agent messages
 
 Scope: Chrome only (uses standard Web Push API).
 
@@ -17,9 +16,8 @@ Scope: Chrome only (uses standard Web Push API).
 
 Allow the agent API to signal "typing" state to the chat UI.
 
-Requirements:
-- Agent API endpoint: `POST /typing` with `{ typing: boolean }`
-- Broadcast typing state via SSE: `{ type: 'typing', typing: boolean }`
-- Client shows typing indicator (animated dots) below messages when `typing: true`
-- Auto-clear typing state after timeout (e.g., 30s) if agent doesn't send `typing: false`
-- Typing indicator disappears when new agent message arrives
+- [x] Agent API endpoint: `POST /typing` with `{ active: boolean }`
+- [x] Broadcast typing state via SSE: `{ type: 'agentTyping', active: boolean }`
+- [x] Client shows typing indicator (animated dots) below messages
+- [x] Auto-clear on agent disconnect or message send
+- [x] Typing indicator disappears when new agent message arrives

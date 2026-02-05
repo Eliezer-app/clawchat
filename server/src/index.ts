@@ -45,11 +45,16 @@ function notifyAgent(type: string, payload: unknown): void {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(event),
   })
-    .then((res) => {
+    .then(async (res) => {
       if (res.ok) {
         broadcast({ type: SSEEventType.AGENT_STATUS, connected: true });
       } else {
-        broadcast({ type: SSEEventType.AGENT_STATUS, connected: false, error: `HTTP ${res.status}` });
+        let error = `HTTP ${res.status}`;
+        try {
+          const json = await res.json();
+          if (json.error) error = json.error;
+        } catch {}
+        broadcast({ type: SSEEventType.AGENT_STATUS, connected: false, error });
         broadcast({ type: SSEEventType.AGENT_TYPING, active: false });
       }
     })
