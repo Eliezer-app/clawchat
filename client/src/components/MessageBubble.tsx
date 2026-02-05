@@ -20,7 +20,7 @@ export default function MessageBubble(props: MessageBubbleProps) {
   const handleOpenWidget = () => {
     const w = widgets();
     if (w.length > 0) {
-      openWidgetInNewTab(w[0], msg.conversationId);
+      openWidgetInNewTab(w[0].code, msg.conversationId);
     }
   };
 
@@ -38,7 +38,7 @@ export default function MessageBubble(props: MessageBubbleProps) {
       <div class="bubble">
         <button class="delete-btn" onClick={() => props.onDelete(msg.id)}>×</button>
         <Show when={widgets().length > 0}>
-          <button class="open-widget-btn" onClick={handleOpenWidget} title="Open widget in new tab">↗</button>
+          <button class="open-widget-btn" onClick={handleOpenWidget} title="Open widget in new tab">⧉</button>
         </Show>
         <Show when={msg.content}>{props.renderContent(msg.content, msg.conversationId)}</Show>
         <Show when={msg.attachment}>

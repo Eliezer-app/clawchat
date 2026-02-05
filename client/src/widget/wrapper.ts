@@ -134,6 +134,9 @@ const WIDGET_FRAMEWORK_IFRAME = `
       init();
     }
 
+    // Report height again after all resources (scripts, images) have loaded
+    window.addEventListener('load', () => reportHeight());
+
     // Catch unhandled errors
     window.onerror = function(msg, url, line, col, err) {
       reportError(msg + ' at line ' + line, err?.stack);

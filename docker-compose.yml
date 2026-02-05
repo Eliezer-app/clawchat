@@ -1,32 +1,38 @@
 services:
   server:
     image: node:20-alpine
-    working_dir: /app
+    working_dir: /opt/clawchat
     command: sh -c "corepack enable && pnpm install && pnpm --filter @clawchat/server dev"
     environment:
       - PUBLIC_HOST=0.0.0.0
+      - AGENT_PORT=3100
+      - PUBLIC_PORT=3101
+      - DB_PATH=/opt/clawchat/server/data/chat.db
+      - UPLOADS_DIR=/opt/clawchat/server/data/uploads
+      - APPS_DIR=/opt/clawchat/apps
+      - CLIENT_DIST=/opt/clawchat/client/dist
     ports:
       - "3100:3100"
       - "3101:3101"
     volumes:
-      - .:/app
-      - server_store:/app/.pnpm-store
-      - server_root_modules:/app/node_modules
-      - server_modules:/app/server/node_modules
+      - .:/opt/clawchat
+      - server_store:/opt/clawchat/.pnpm-store
+      - server_root_modules:/opt/clawchat/node_modules
+      - server_modules:/opt/clawchat/server/node_modules
 
   client:
     image: node:20-alpine
-    working_dir: /app
+    working_dir: /opt/clawchat
     command: sh -c "corepack enable && pnpm install && pnpm --filter @clawchat/client dev --host"
     environment:
       - API_URL=http://server:3101
     ports:
       - "3102:3102"
     volumes:
-      - .:/app
-      - client_store:/app/.pnpm-store
-      - client_root_modules:/app/node_modules
-      - client_modules:/app/client/node_modules
+      - .:/opt/clawchat
+      - client_store:/opt/clawchat/.pnpm-store
+      - client_root_modules:/opt/clawchat/node_modules
+      - client_modules:/opt/clawchat/client/node_modules
     depends_on:
       - server
 

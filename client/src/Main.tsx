@@ -163,7 +163,9 @@ export default function Main() {
       if (match.index > lastIndex) {
         parts.push(text.slice(lastIndex, match.index));
       }
-      parts.push({ lang: match[1] || '', code: match[2].trim() });
+      const lang = match[1] || '';
+      const code = match[2]?.trim() || '';
+      parts.push({ lang, code });
       lastIndex = match.index + match[0].length;
     }
 

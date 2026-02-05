@@ -3,7 +3,8 @@ import fs from 'fs';
 import path from 'path';
 import type { Message, Attachment } from '@clawchat/shared';
 
-const dbPath = process.env.DB_PATH || path.join(process.cwd(), 'data', 'chat.db');
+const dbPath = process.env.DB_PATH;
+if (!dbPath) throw new Error('DB_PATH environment variable is required');
 fs.mkdirSync(path.dirname(dbPath), { recursive: true });
 const db = new Database(dbPath);
 

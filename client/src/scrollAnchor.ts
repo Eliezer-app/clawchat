@@ -13,13 +13,14 @@ export function compensateScroll(delta: number, elementRect: DOMRect) {
   const isAboveCenter = elementRect.bottom < viewCenter;
   const isAtBottom = container.scrollTop + container.clientHeight >= container.scrollHeight - 50;
 
-  if (isAboveCenter) {
-    container.scrollTop += delta;
-  } else if (isAtBottom) {
-    // Apply after resize settles
+  if (isAtBottom) {
+    // Stay at bottom - apply after resize settles
     requestAnimationFrame(() => {
       container.scrollTop = container.scrollHeight;
     });
+  } else if (isAboveCenter) {
+    // Widget is above viewport center - compensate to keep lower content stable
+    container.scrollTop += delta;
   }
 }
 

@@ -7,12 +7,42 @@ import { getMessages, addMessage, deleteMessage, updateMessage, getAppState, set
 import type { Message, Attachment, WidgetError } from '@clawchat/shared';
 import { SSEEventType } from '@clawchat/shared';
 
-const agentPort = process.env.AGENT_PORT || 3100;
-const publicPort = process.env.PUBLIC_PORT || 3101;
-const uploadsDir = process.env.UPLOADS_DIR || path.join(process.cwd(), 'data', 'uploads');
+function requireEnv(name: string): string {
+  const value = process.env[name];
+  if (!value) throw new Error(`${name} environment variable is required`);
+  return value;
+}
 
-// Ensure uploads directory exists
+const agentPort = requireEnv('AGENT_PORT');
+const publicPort = requireEnv('PUBLIC_PORT');
+const uploadsDir = requireEnv('UPLOADS_DIR');
+const appsDir = requireEnv('APPS_DIR');
+const clientDist = requireEnv('CLIENT_DIST');
+
+// Ensure data directories exist
 fs.mkdirSync(uploadsDir, { recursive: true });
+
+// Expand widget file references in message content
+// Transforms ```widget:path/to/file.html``` to ```widget\n<file contents>```
+function expandWidgetFiles(content: string): string {
+  return content.replace(/```widget:([^\n]+)\n?```/g, (_, filePath) => {
+    const trimmedPath = filePath.trim();
+    if (trimmedPath.includes('..') || !trimmedPath.endsWith('.html')) {
+      return '```widget\n<!-- Invalid widget path -->\n```';
+    }
+    const fullPath = path.join(appsDir, trimmedPath);
+    try {
+      const html = fs.readFileSync(fullPath, 'utf-8');
+      return '```widget\n' + html + '\n```';
+    } catch {
+      return '```widget\n<!-- Widget file not found: ' + trimmedPath + ' -->\n```';
+    }
+  });
+}
+
+function expandMessage(msg: Message): Message {
+  return { ...msg, content: expandWidgetFiles(msg.content) };
+}
 
 // Configure multer for file uploads
 const storage = multer.diskStorage({
@@ -52,7 +82,7 @@ function createMessage(role: Message['role'], content: string, attachment?: Atta
     attachment,
     createdAt: new Date().toISOString(),
   });
-  broadcast({ type: 'message', message });
+  broadcast({ type: 'message', message: expandMessage(message) });
   return message;
 }
 
@@ -118,7 +148,7 @@ agentApp.patch('/messages/:id', (req, res) => {
     res.status(404).json({ error: 'Message not found' });
     return;
   }
-  broadcast({ type: 'update', message });
+  broadcast({ type: 'update', message: expandMessage(message) });
   res.json(message);
 });
 
@@ -147,7 +177,6 @@ publicApp.use(cookieParser());
 // publicApp.use('/api/files', express.static(uploadsDir));
 
 // Serve frontend static files
-const clientDist = path.resolve(process.cwd(), '..', 'client', 'dist');
 
 // Auth check helper
 function isAuthenticated(req: Request): boolean {
@@ -308,7 +337,7 @@ publicApp.get('/api/events', (req, res) => {
 });
 
 publicApp.get('/api/messages', (req, res) => {
-  res.json(getMessages());
+  res.json(getMessages().map(expandMessage));
 });
 
 publicApp.post('/api/messages', (req, res) => {
@@ -465,7 +494,7 @@ agentApp.listen(Number(agentPort), '127.0.0.1', () => {
   console.log(`Agent API running on 127.0.0.1:${agentPort}`);
 });
 
-const publicHost = process.env.PUBLIC_HOST || '127.0.0.1';
+const publicHost = requireEnv('PUBLIC_HOST');
 publicApp.listen(Number(publicPort), publicHost, () => {
   console.log(`Public API running on ${publicHost}:${publicPort}`);
 });
