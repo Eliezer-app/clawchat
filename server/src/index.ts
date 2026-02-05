@@ -603,14 +603,15 @@ publicApp.post('/api/upload', upload.single('file'), (req, res) => {
 
 publicApp.delete('/api/messages/:id', (req, res) => {
   const { id } = req.params;
-  const deleted = deleteMessage(id);
-  if (!deleted) {
+  const message = getMessage(id);
+  if (!message) {
     res.status(404).json({ error: 'Message not found' });
     return;
   }
+  deleteMessage(id);
   broadcast({ type: 'delete', id });
   notifyAgent('message_deleted', {
-    conversationId: 'default', // TODO: get from message before delete
+    conversationId: message.conversationId,
     messageId: id,
   });
   res.json({ ok: true });
