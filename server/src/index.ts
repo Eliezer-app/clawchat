@@ -20,6 +20,7 @@ const uploadsDir = requireEnv('UPLOADS_DIR');
 const appsDir = requireEnv('APPS_DIR');
 const clientDist = requireEnv('CLIENT_DIST');
 const agentUrl = process.env.AGENT_URL; // Optional - agent may not be running
+const promptListFile = process.env.PROMPT_LIST_FILE; // Optional - path to prompt-list.txt
 
 // ===================
 // Agent Notification
@@ -567,6 +568,89 @@ publicApp.delete('/api/messages/:id', (req, res) => {
     messageId: id,
   });
   res.json({ ok: true });
+});
+
+// ===================
+// Prompts endpoints
+// ===================
+
+interface PromptInfo {
+  name: string;
+  path: string;
+}
+
+function getPromptList(): PromptInfo[] {
+  if (!promptListFile) return [];
+  try {
+    const content = fs.readFileSync(promptListFile, 'utf-8');
+    const lines = content.split('\n').filter(line => line.trim());
+    return lines.map(line => {
+      const filePath = line.trim();
+      const name = path.basename(filePath, '.md');
+      return { name, path: filePath };
+    });
+  } catch {
+    return [];
+  }
+}
+
+function resolvePromptPath(promptPath: string): string {
+  // If absolute, use as-is; otherwise resolve relative to project root (parent of prompt-list.txt)
+  if (path.isAbsolute(promptPath)) {
+    return promptPath;
+  }
+  const projectRoot = path.dirname(promptListFile || '');
+  return path.resolve(projectRoot, promptPath);
+}
+
+publicApp.get('/api/prompts', (req, res) => {
+  const prompts = getPromptList();
+  res.json(prompts.map(p => ({ name: p.name })));
+});
+
+publicApp.get('/api/prompts/:name', (req, res) => {
+  const { name } = req.params;
+  const prompts = getPromptList();
+  const prompt = prompts.find(p => p.name === name);
+
+  if (!prompt) {
+    res.status(404).json({ error: 'Prompt not found' });
+    return;
+  }
+
+  try {
+    const fullPath = resolvePromptPath(prompt.path);
+    const content = fs.readFileSync(fullPath, 'utf-8');
+    res.json({ name: prompt.name, content });
+  } catch {
+    res.status(404).json({ error: 'Prompt file not found' });
+  }
+});
+
+publicApp.put('/api/prompts/:name', (req, res) => {
+  const { name } = req.params;
+  const { content } = req.body;
+
+  if (typeof content !== 'string') {
+    res.status(400).json({ error: 'Content required' });
+    return;
+  }
+
+  const prompts = getPromptList();
+  const prompt = prompts.find(p => p.name === name);
+
+  if (!prompt) {
+    res.status(404).json({ error: 'Prompt not found' });
+    return;
+  }
+
+  try {
+    const fullPath = resolvePromptPath(prompt.path);
+    fs.writeFileSync(fullPath, content, 'utf-8');
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to save prompt' });
+  }
 });
 
 // App state endpoints (widgets are views into app state)

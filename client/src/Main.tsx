@@ -222,7 +222,7 @@ export default function Main() {
           <div class="app">
             <header class={`header ${agentConnected() ? '' : 'agent-offline'}`}>
               <span class="header-title">ClawChat</span>
-              <button class="settings-btn" onClick={() => setShowSettings(true)}>⚙</button>
+              <button class="settings-btn" onClick={() => setShowSettings(true)} title="Settings">⚙</button>
             </header>
 
             <Show when={showSettings() || shouldPromptNotifications()}>

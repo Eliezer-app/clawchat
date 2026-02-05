@@ -1,0 +1,3 @@
+prompts/system.md
+prompts/user.md
+prompts/memory.md
