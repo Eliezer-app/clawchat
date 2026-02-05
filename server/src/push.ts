@@ -1,5 +1,5 @@
 import webpush from 'web-push';
-import { getAllPushSubscriptions, deletePushSubscription } from './db.js';
+import { getAllPushSubscriptions, deletePushSubscription, getVisibleSessionIds } from './db.js';
 
 let initialized = false;
 
@@ -39,6 +39,13 @@ export async function sendPushToAll(payload: PushPayload): Promise<void> {
 
   const subscriptions = getAllPushSubscriptions();
   if (subscriptions.length === 0) return;
+
+  // If any device is viewing chat, skip all notifications
+  const visibleSessionIds = getVisibleSessionIds();
+  if (visibleSessionIds.length > 0) {
+    console.log('[Push] User viewing chat on another device, skipping notifications');
+    return;
+  }
 
   const payloadStr = JSON.stringify(payload);
 

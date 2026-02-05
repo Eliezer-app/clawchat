@@ -163,11 +163,25 @@ export function setAppState(conversationId: string, appId: string, state: unknow
 // Session Management
 // ===================
 
+// Migration: add lastActiveAt and isVisible columns to sessions
+try {
+  db.exec(`ALTER TABLE sessions ADD COLUMN lastActiveAt TEXT`);
+} catch {
+  // Column already exists
+}
+try {
+  db.exec(`ALTER TABLE sessions ADD COLUMN isVisible INTEGER DEFAULT 0`);
+} catch {
+  // Column already exists
+}
+
 export interface Session {
   id: string;
   token: string;
   createdAt: string;
   expiresAt: string | null;
+  lastActiveAt: string | null;
+  isVisible: boolean;
 }
 
 export function createSession(expiresInMs?: number): Session {
@@ -175,25 +189,53 @@ export function createSession(expiresInMs?: number): Session {
   const token = crypto.randomUUID();
   const createdAt = new Date().toISOString();
   const expiresAt = expiresInMs ? new Date(Date.now() + expiresInMs).toISOString() : null;
-  
+
   db.prepare('INSERT INTO sessions (id, token, createdAt, expiresAt) VALUES (?, ?, ?, ?)').run(id, token, createdAt, expiresAt);
-  return { id, token, createdAt, expiresAt };
+  return { id, token, createdAt, expiresAt, lastActiveAt: null, isVisible: false };
+}
+
+interface DbSession {
+  id: string;
+  token: string;
+  createdAt: string;
+  expiresAt: string | null;
+  lastActiveAt: string | null;
+  isVisible: number | null;
 }
 
 export function getSessionByToken(token: string): Session | null {
-  const row = db.prepare('SELECT * FROM sessions WHERE token = ?').get(token) as Session | undefined;
+  const row = db.prepare('SELECT * FROM sessions WHERE token = ?').get(token) as DbSession | undefined;
   if (!row) return null;
   // Check expiry
   if (row.expiresAt && new Date(row.expiresAt) < new Date()) {
     db.prepare('DELETE FROM sessions WHERE id = ?').run(row.id);
     return null;
   }
-  return row;
+  return { ...row, isVisible: row.isVisible === 1 };
 }
 
 export function deleteSession(token: string): boolean {
   const result = db.prepare('DELETE FROM sessions WHERE token = ?').run(token);
   return result.changes > 0;
+}
+
+export function updateSessionActivity(sessionId: string): void {
+  const now = new Date().toISOString();
+  db.prepare('UPDATE sessions SET lastActiveAt = ? WHERE id = ?').run(now, sessionId);
+}
+
+export function setSessionVisibility(sessionId: string, isVisible: boolean): void {
+  db.prepare('UPDATE sessions SET isVisible = ? WHERE id = ?').run(isVisible ? 1 : 0, sessionId);
+}
+
+const STALE_SESSION_MS = 5 * 60 * 1000; // 5 minutes
+
+export function getVisibleSessionIds(): string[] {
+  // Only return sessions that are both visible AND recently active
+  // This handles orphaned sessions where pagehide failed to fire
+  const cutoff = new Date(Date.now() - STALE_SESSION_MS).toISOString();
+  const rows = db.prepare('SELECT id FROM sessions WHERE isVisible = 1 AND lastActiveAt > ?').all(cutoff) as { id: string }[];
+  return rows.map(r => r.id);
 }
 
 // ===================

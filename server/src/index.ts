@@ -3,7 +3,7 @@ import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
 import cookieParser from 'cookie-parser';
-import { getMessages, addMessage, deleteMessage, updateMessage, getAppState, setAppState, getSessionByToken, createSession, deleteSession, getInvite, markInviteUsed, createPushSubscription, deletePushSubscription } from './db.js';
+import { getMessages, addMessage, deleteMessage, updateMessage, getAppState, setAppState, getSessionByToken, createSession, deleteSession, getInvite, markInviteUsed, createPushSubscription, deletePushSubscription, setSessionVisibility, updateSessionActivity } from './db.js';
 import { initPush, getVapidPublicKey, sendPushToAll, isPushEnabled } from './push.js';
 import type { Message, Attachment, WidgetError } from '@clawchat/shared';
 import { SSEEventType } from '@clawchat/shared';
@@ -400,6 +400,32 @@ publicApp.delete('/api/push/subscribe', (req, res) => {
   res.json({ ok: true });
 });
 
+// Visibility tracking - client reports when tab is visible/hidden
+// Used to suppress push notifications when user is viewing chat
+publicApp.post('/api/visibility', (req, res) => {
+  if (!isAuthenticated(req)) {
+    res.status(401).json({ error: 'Unauthorized' });
+    return;
+  }
+
+  const { visible } = req.body;
+  if (typeof visible !== 'boolean') {
+    res.status(400).json({ error: 'visible (boolean) required' });
+    return;
+  }
+
+  const sessionToken = req.cookies?.session;
+  const session = getSessionByToken(sessionToken);
+  if (!session) {
+    res.status(401).json({ error: 'Invalid session' });
+    return;
+  }
+
+  setSessionVisibility(session.id, visible);
+  updateSessionActivity(session.id);
+  res.json({ ok: true });
+});
+
 // Invite landing page (public)
 publicApp.get('/invite', (req, res) => {
   // Check if already authenticated
@@ -414,7 +440,8 @@ publicApp.get('/invite', (req, res) => {
     return res.redirect(`/api/auth/invite?token=${encodeURIComponent(token)}`);
   }
   
-  // Show "scan to join" page
+  // Show "scan to join" page with token form
+  res.setHeader('Cache-Control', 'no-store');
   res.send(`<!DOCTYPE html>
 <html>
 <head>
@@ -423,16 +450,26 @@ publicApp.get('/invite', (req, res) => {
   <title>Join ClawChat</title>
   <style>
     body { font-family: system-ui, sans-serif; display: flex; align-items: center; justify-content: center; min-height: 100vh; margin: 0; background: #0a0a0a; color: #fff; }
-    .container { text-align: center; padding: 2rem; }
+    .container { text-align: center; padding: 2rem; max-width: 400px; }
     h1 { font-size: 2rem; margin-bottom: 1rem; }
-    p { color: #888; }
+    p { color: #888; margin-bottom: 1.5rem; }
+    form { display: flex; flex-direction: column; gap: 0.75rem; }
+    input { padding: 0.75rem; border: 1px solid #333; border-radius: 6px; background: #1a1a1a; color: #fff; font-size: 1rem; }
+    input:focus { outline: none; border-color: #667eea; }
+    button { padding: 0.75rem; border: none; border-radius: 6px; background: linear-gradient(135deg, #667eea, #764ba2); color: #fff; font-size: 1rem; cursor: pointer; }
+    button:hover { opacity: 0.9; }
+    .hint { font-size: 0.75rem; color: #666; margin-top: 1rem; }
   </style>
 </head>
 <body>
   <div class="container">
-    <h1>🔒 ClawChat</h1>
-    <p>Scan an invite QR code to join.</p>
-    <p style="margin-top: 2rem; font-size: 0.875rem;">Run <code>pnpm agent-invite</code> on the server to generate one.</p>
+    <h1>ClawChat</h1>
+    <p>This chat is invite-only.<br>Enter your invite token below.</p>
+    <form action="/invite" method="get">
+      <input type="text" name="token" placeholder="Invite token" required autofocus />
+      <button type="submit">Join</button>
+    </form>
+    <p class="hint">Ask the admin for an invite token or scan a QR code.</p>
   </div>
 </body>
 </html>`);

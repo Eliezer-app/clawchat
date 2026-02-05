@@ -9,6 +9,7 @@ import Lightbox from './components/Lightbox';
 import SettingsModal, { useShouldPromptNotifications } from './components/SettingsModal';
 import { AuthChecking, AuthLocked } from './components/AuthScreens';
 import Toast from './components/Toast';
+import { useActivityTracking } from './hooks/useActivityTracking';
 import './Main.css';
 
 export default function Main() {
@@ -20,6 +21,9 @@ export default function Main() {
   const [agentTyping, setAgentTyping] = createSignal(false);
   const [toast, setToast] = createSignal<string | null>(null);
   const { shouldPrompt: shouldPromptNotifications, dismiss: dismissNotificationPrompt } = useShouldPromptNotifications();
+
+  // Track user activity for push notification suppression
+  useActivityTracking();
 
   let messagesContainer: HTMLDivElement | undefined;
 

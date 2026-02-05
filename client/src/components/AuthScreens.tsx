@@ -18,6 +18,29 @@ export function AuthChecking() {
 }
 
 export function AuthLocked() {
+  let inputRef: HTMLInputElement | undefined;
+  let errorRef: HTMLDivElement | undefined;
+
+  const handleSubmit = async (e: Event) => {
+    e.preventDefault();
+    const token = inputRef?.value?.trim();
+    if (!token) return;
+
+    if (errorRef) errorRef.textContent = '';
+
+    try {
+      const res = await fetch(`/api/auth/invite?token=${encodeURIComponent(token)}`);
+      if (res.ok || res.redirected) {
+        window.location.href = '/';
+      } else {
+        const data = await res.json();
+        if (errorRef) errorRef.textContent = data.error || 'Invalid token';
+      }
+    } catch {
+      if (errorRef) errorRef.textContent = 'Connection error';
+    }
+  };
+
   return (
     <div style={{
       display: 'flex',
@@ -43,10 +66,44 @@ export function AuthLocked() {
         </h1>
         <p style={{ 'font-size': '16px', opacity: 0.9, 'line-height': '1.5', 'margin-bottom': '24px' }}>
           This chat is invite-only.<br />
-          Ask the admin for an invite link or scan a QR code.
+          Enter your invite token below.
         </p>
-        <div style={{ 'font-size': '13px', opacity: 0.7 }}>
-          Run <code style={{ background: 'rgba(0,0,0,0.2)', padding: '2px 6px', 'border-radius': '4px' }}>pnpm invite</code> on the server to generate an invite.
+        <form onSubmit={handleSubmit} style={{ display: 'flex', 'flex-direction': 'column', gap: '12px' }}>
+          <input
+            ref={inputRef}
+            type="text"
+            placeholder="Invite token"
+            required
+            autofocus
+            style={{
+              padding: '12px',
+              border: 'none',
+              'border-radius': '8px',
+              background: 'rgba(255,255,255,0.2)',
+              color: 'white',
+              'font-size': '16px',
+              'text-align': 'center',
+            }}
+          />
+          <button
+            type="submit"
+            style={{
+              padding: '12px',
+              border: 'none',
+              'border-radius': '8px',
+              background: 'white',
+              color: '#667eea',
+              'font-size': '16px',
+              'font-weight': '600',
+              cursor: 'pointer',
+            }}
+          >
+            Join
+          </button>
+          <div ref={errorRef} style={{ color: '#ff6b6b', 'font-size': '14px', 'min-height': '20px' }} />
+        </form>
+        <div style={{ 'font-size': '13px', opacity: 0.7, 'margin-top': '12px' }}>
+          Ask the admin for an invite token or scan a QR code.
         </div>
       </div>
     </div>
