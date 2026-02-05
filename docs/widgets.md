@@ -1,6 +1,12 @@
 # Widgets
 
-Widgets are interactive HTML/JS components embedded in chat messages:
+Widgets are interactive HTML/JS components embedded in chat messages.
+
+## Embedding Widgets
+
+### Inline Widget
+
+Embed HTML directly in a message:
 
 ~~~markdown
 ```widget
@@ -8,7 +14,20 @@ Widgets are interactive HTML/JS components embedded in chat messages:
 ```
 ~~~
 
-A framework is auto-injected that handles resize detection. State and request APIs are available but must be explicitly used.
+### File-based Widget
+
+Reference an HTML file from the `apps/` directory:
+
+~~~markdown
+```widget:globe/widgets/explorer.html
+```
+~~~
+
+The server expands file references to inline HTML when serving messages. Path traversal (`..`) is blocked.
+
+## Framework
+
+A framework is auto-injected that handles resize detection, state management, and server requests.
 
 ## Framework API
 
@@ -156,3 +175,60 @@ Widgets without state work fine - just don't use state methods:
 - **Created** when approaching viewport (200px before visible)
 - **Stays loaded** once created (not unloaded on scroll)
 - Scroll stays at bottom as widgets resize during page load
+
+## Server-Side Actions
+
+Register custom action handlers in `server/src/index.ts`:
+
+```typescript
+import { registerAppAction } from './index.js';
+
+registerAppAction('getWeather', ({ conversationId, appId, payload }) => {
+  const { city } = payload as { city?: string };
+  if (!city) {
+    return { error: 'City required' };
+  }
+  // Return data (will be wrapped in { ok: true, result: ... })
+  return { city, temp: 22, description: 'Sunny' };
+});
+```
+
+Call from widget:
+
+```javascript
+const weather = await widget.request('my-app', 'getWeather', { city: 'London' });
+console.log(weather.temp); // 22
+```
+
+### Handler Context
+
+| Field | Description |
+|-------|-------------|
+| `conversationId` | Current conversation |
+| `appId` | App ID from request |
+| `payload` | Request payload object |
+
+### Return Values
+
+- Return an object → success response with `{ ok: true, result: <your object> }`
+- Return `{ error: 'message' }` → error response
+- Throw an error → error response with error message
+
+## Fullscreen Mode
+
+Click the ⧉ button on a widget to open it in a new tab at `/message/:id/widget`. The widget fills the viewport and the framework sets:
+
+- `document.body.classList.add('widget-fullscreen')`
+- CSS variable `--widget-layout: fullscreen`
+
+Use these to adapt layout:
+
+```css
+body { height: 450px; }
+body.widget-fullscreen { height: 100%; }
+```
+
+```javascript
+const isFullscreen = getComputedStyle(document.documentElement)
+  .getPropertyValue('--widget-layout').trim() === 'fullscreen';
+```
