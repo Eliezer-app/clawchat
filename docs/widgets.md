@@ -20,56 +20,63 @@ widget.onState(state => {
   tasks = state?.tasks || [];
   render();
 });
-widget.getState(); // fetch initial state
+widget.getState(APP_ID);
 ```
 
-### widget.setState(state)
-Save state to the server.
-
-```javascript
-widget.setState({ tasks });
-```
-
-### widget.getState()
+### widget.getState(appId)
 Request current state from server. Call after registering onState callback.
 
 ```javascript
-widget.getState();
+widget.getState(APP_ID);
 ```
 
-### widget.request(action, payload)
+### widget.setState(appId, state)
+Save state to the server.
+
+```javascript
+widget.setState(APP_ID, { tasks });
+```
+
+### widget.request(appId, action, payload)
 Make a server request. Returns a promise.
 
 ```javascript
-const result = await widget.request('vote', { option: 'A' });
+const result = await widget.request(APP_ID, 'vote', { option: 'A' });
 ```
 
-## Widget ID
+## Best Practice: Define App ID
 
-Add a comment to set a stable ID for state persistence:
+Define the app ID as a top-level constant for clarity and consistency:
 
 ```javascript
-// widget-id: my-todo-list
+const APP_ID = 'my-todo-app';
+
+// Then use it in all state calls
+widget.getState(APP_ID);
+widget.setState(APP_ID, { tasks });
+widget.request(APP_ID, 'addTask', { text: 'New task' });
 ```
 
-Widgets with the same ID share state. If omitted, ID is derived from code hash.
+Widgets with the same app ID share state. This is intentional - multiple widgets can be views into the same app.
 
 ## Auto Features
 
 - **Resize** - ResizeObserver auto-reports height changes
 - **CSS reset** - `box-sizing: border-box`, no margin/padding on body
 - **Sandbox** - Runs in `sandbox="allow-scripts"` iframe
+- **Live sync** - When one widget updates state, other widgets with the same appId automatically receive the new state via their `onState` callback
 
 ## Message Protocol
 
 | Direction | Type | Fields |
 |-----------|------|--------|
-| Widget → Parent | `getState` | - |
-| Widget → Parent | `setState` | `state` |
+| Widget → Parent | `getState` | `appId` |
+| Widget → Parent | `setState` | `appId`, `state` |
 | Widget → Parent | `resize` | `height` |
-| Widget → Parent | `request` | `id`, `action`, `payload` |
+| Widget → Parent | `request` | `id`, `appId`, `action`, `payload` |
 | Parent → Widget | `state` | `state` |
 | Parent → Widget | `response` | `id`, `data`, `error?` |
+| Parent → Widget | `stateUpdated` | `appId` (triggers auto re-fetch) |
 
 ## Example: Todo List
 
@@ -90,7 +97,7 @@ Widgets with the same ID share state. If omitted, ID is derived from code hash.
   <button onclick="add()">Add</button>
   <ul id="list"></ul>
   <script>
-    // widget-id: todo
+    const APP_ID = 'todo';
     let tasks = [];
 
     function render() {
@@ -104,7 +111,7 @@ Widgets with the same ID share state. If omitted, ID is derived from code hash.
         tasks.push(inp.value.trim());
         inp.value = '';
         render();
-        widget.setState({ tasks });
+        widget.setState(APP_ID, { tasks });
       }
     }
 
@@ -112,7 +119,7 @@ Widgets with the same ID share state. If omitted, ID is derived from code hash.
       tasks = state?.tasks || [];
       render();
     });
-    widget.getState();
+    widget.getState(APP_ID);
   </script>
 </body>
 </html>
@@ -120,7 +127,7 @@ Widgets with the same ID share state. If omitted, ID is derived from code hash.
 
 ## Example: Stateless Counter
 
-Widgets without state work fine - just don't use `widget.onState`/`widget.setState`:
+Widgets without state work fine - just don't use state methods:
 
 ```widget
 <!DOCTYPE html>

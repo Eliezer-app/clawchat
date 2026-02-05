@@ -1,4 +1,5 @@
 import { createSignal, onMount, For, createEffect, Show, Switch, Match, JSX } from 'solid-js';
+import { SSEEventType, WidgetApi } from '@clawchat/shared';
 import type { Message } from '@clawchat/shared';
 import CodeBlock from './components/CodeBlock';
 import Widget from './components/Widget';
@@ -7,9 +8,9 @@ import InputArea from './components/InputArea';
 import Lightbox from './components/Lightbox';
 import SettingsModal from './components/SettingsModal';
 import { AuthChecking, AuthLocked } from './components/AuthScreens';
-import './App.css';
+import './Main.css';
 
-export default function App() {
+export default function Main() {
   const [authState, setAuthState] = createSignal<'checking' | 'authenticated' | 'unauthenticated'>('checking');
   const [messages, setMessages] = createSignal<Message[]>([]);
   const [lightbox, setLightbox] = createSignal<{ src: string; filename: string } | null>(null);
@@ -84,15 +85,28 @@ export default function App() {
 
     // SSE connection
     function connectSSE() {
-      const events = new EventSource('/api/events');
+      const events = new EventSource(WidgetApi.events);
       events.onmessage = (e) => {
-        const data = JSON.parse(e.data);
-        if (data.type === 'message') {
-          setMessages(msgs => [...msgs, data.message]);
-        } else if (data.type === 'delete') {
-          setMessages(msgs => msgs.filter(m => m.id !== data.id));
-        } else if (data.type === 'update') {
-          setMessages(msgs => msgs.map(m => m.id === data.message.id ? data.message : m));
+        try {
+          const data = JSON.parse(e.data);
+          switch (data.type) {
+            case SSEEventType.MESSAGE:
+              setMessages(msgs => [...msgs, data.message]);
+              break;
+            case SSEEventType.DELETE:
+              setMessages(msgs => msgs.filter(m => m.id !== data.id));
+              break;
+            case SSEEventType.UPDATE:
+              setMessages(msgs => msgs.map(m => m.id === data.message.id ? data.message : m));
+              break;
+            case SSEEventType.APP_STATE_UPDATED:
+              window.dispatchEvent(new CustomEvent('appStateUpdated', {
+                detail: { conversationId: data.conversationId, appId: data.appId }
+              }));
+              break;
+          }
+        } catch (err) {
+          console.error('SSE parse error:', err);
         }
       };
       events.onerror = () => {

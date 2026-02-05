@@ -1,8 +1,9 @@
-import { Show, JSX } from 'solid-js';
+import { Show, JSX, createMemo } from 'solid-js';
 import type { Message } from '@clawchat/shared';
 import AudioPlayer from './AudioPlayer';
 import { formatTime, formatSize } from '../format';
 import { stayAtBottomIfNeeded } from '../scrollAnchor';
+import { extractWidgets, openWidgetInNewTab } from '../widget';
 
 interface MessageBubbleProps {
   message: Message;
@@ -13,6 +14,15 @@ interface MessageBubbleProps {
 
 export default function MessageBubble(props: MessageBubbleProps) {
   const msg = props.message;
+
+  const widgets = createMemo(() => extractWidgets(msg.content));
+
+  const handleOpenWidget = () => {
+    const w = widgets();
+    if (w.length > 0) {
+      openWidgetInNewTab(w[0], msg.conversationId);
+    }
+  };
 
   const getFileUrl = () => {
     if (!msg.attachment) return '';
@@ -27,6 +37,9 @@ export default function MessageBubble(props: MessageBubbleProps) {
     <div class={`message ${msg.role}`}>
       <div class="bubble">
         <button class="delete-btn" onClick={() => props.onDelete(msg.id)}>×</button>
+        <Show when={widgets().length > 0}>
+          <button class="open-widget-btn" onClick={handleOpenWidget} title="Open widget in new tab">↗</button>
+        </Show>
         <Show when={msg.content}>{props.renderContent(msg.content, msg.conversationId)}</Show>
         <Show when={msg.attachment}>
           {(att) => (

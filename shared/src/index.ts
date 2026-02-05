@@ -1,3 +1,5 @@
+export * from './widget.js';
+
 export interface Attachment {
   id: string;
   filename: string;

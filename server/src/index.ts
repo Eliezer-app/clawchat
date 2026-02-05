@@ -3,8 +3,9 @@ import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
 import cookieParser from 'cookie-parser';
-import { getMessages, addMessage, deleteMessage, updateMessage, getWidgetState, setWidgetState, getSessionByToken, createSession, deleteSession, getInvite, markInviteUsed } from './db.js';
-import type { Message, Attachment } from '@clawchat/shared';
+import { getMessages, addMessage, deleteMessage, updateMessage, getAppState, setAppState, getSessionByToken, createSession, deleteSession, getInvite, markInviteUsed } from './db.js';
+import type { Message, Attachment, WidgetError } from '@clawchat/shared';
+import { SSEEventType } from '@clawchat/shared';
 
 const agentPort = process.env.AGENT_PORT || 3100;
 const publicPort = process.env.PUBLIC_PORT || 3101;
@@ -157,7 +158,8 @@ function isAuthenticated(req: Request): boolean {
 }
 
 // Auth middleware - skip for specific routes
-const publicPaths = ['/api/auth/invite', '/api/health', '/invite', '/api/events'];
+// NOTE: /api/events (SSE) intentionally requires auth - contains sensitive data
+const publicPaths = ['/api/auth/invite', '/api/health', '/invite'];
 
 function authMiddleware(req: Request, res: Response, next: NextFunction) {
   // Skip auth for public paths
@@ -354,10 +356,10 @@ publicApp.delete('/api/messages/:id', (req, res) => {
   res.json({ ok: true });
 });
 
-// Widget state endpoints
-publicApp.get('/api/widget-state/:conversationId/:widgetId', (req, res) => {
-  const { conversationId, widgetId } = req.params;
-  const state = getWidgetState(conversationId, widgetId);
+// App state endpoints (widgets are views into app state)
+publicApp.get('/api/app-state/:conversationId/:appId', (req, res) => {
+  const { conversationId, appId } = req.params;
+  const state = getAppState(conversationId, appId);
   if (!state) {
     res.status(404).json({ error: 'Not found' });
     return;
@@ -365,8 +367,8 @@ publicApp.get('/api/widget-state/:conversationId/:widgetId', (req, res) => {
   res.json(state);
 });
 
-publicApp.post('/api/widget-state/:conversationId/:widgetId', (req, res) => {
-  const { conversationId, widgetId } = req.params;
+publicApp.post('/api/app-state/:conversationId/:appId', (req, res) => {
+  const { conversationId, appId } = req.params;
   const { state, version } = req.body;
 
   // Validate state is present and not too large (1MB limit)
@@ -380,25 +382,29 @@ publicApp.post('/api/widget-state/:conversationId/:widgetId', (req, res) => {
     return;
   }
 
-  const result = setWidgetState(conversationId, widgetId, state, version || 1);
+  const result = setAppState(conversationId, appId, state, version || 1);
+
+  // Broadcast to other widgets viewing this app
+  broadcast({ type: SSEEventType.APP_STATE_UPDATED, conversationId, appId });
+
   res.json(result);
 });
 
-// Widget action endpoint - extensible by agent
-interface WidgetActionContext {
+// App action endpoint - extensible by agent
+interface AppActionContext {
   conversationId: string;
-  widgetId: string;
+  appId: string;
   payload: unknown;
 }
-type WidgetActionHandler = (ctx: WidgetActionContext) => Promise<unknown> | unknown;
-const widgetActionHandlers: Map<string, WidgetActionHandler> = new Map();
+type AppActionHandler = (ctx: AppActionContext) => Promise<unknown> | unknown;
+const appActionHandlers: Map<string, AppActionHandler> = new Map();
 
-export function registerWidgetAction(action: string, handler: WidgetActionHandler) {
-  widgetActionHandlers.set(action, handler);
+export function registerAppAction(action: string, handler: AppActionHandler) {
+  appActionHandlers.set(action, handler);
 }
 
-publicApp.post('/api/widget-action/:conversationId/:widgetId', async (req, res) => {
-  const { conversationId, widgetId } = req.params;
+publicApp.post('/api/app-action/:conversationId/:appId', async (req, res) => {
+  const { conversationId, appId } = req.params;
   const { action, payload } = req.body;
 
   if (!action || typeof action !== 'string') {
@@ -406,18 +412,45 @@ publicApp.post('/api/widget-action/:conversationId/:widgetId', async (req, res) 
     return;
   }
 
-  const handler = widgetActionHandlers.get(action);
+  const handler = appActionHandlers.get(action);
   if (handler) {
     try {
-      const result = await handler({ conversationId, widgetId, payload });
+      const result = await handler({ conversationId, appId, payload });
       res.json({ ok: true, result });
     } catch (err) {
       res.status(500).json({ ok: false, error: (err as Error).message });
     }
   } else {
     // Default: echo back for testing
-    res.json({ ok: true, echo: { conversationId, widgetId, action, payload } });
+    res.json({ ok: true, echo: { conversationId, appId, action, payload } });
   }
+});
+
+// Widget error endpoint - receives errors from widgets and broadcasts to agent
+publicApp.post('/api/widget-error/:conversationId', (req, res) => {
+  const { conversationId } = req.params;
+  const { error, stack, timestamp, appId } = req.body;
+
+  if (!error || typeof error !== 'string') {
+    res.status(400).json({ ok: false, error: 'Error message required' });
+    return;
+  }
+
+  const widgetError: WidgetError = {
+    conversationId,
+    appId,
+    error,
+    stack,
+    timestamp: timestamp || new Date().toISOString(),
+  };
+
+  // Broadcast to SSE clients (agent can listen)
+  broadcast({ type: SSEEventType.WIDGET_ERROR, ...widgetError });
+
+  // Log for server-side visibility
+  console.error('[Widget Error]', conversationId, appId || 'unknown', error);
+
+  res.json({ ok: true });
 });
 
 // SPA catch-all - serve index.html for client-side routing

@@ -26,17 +26,34 @@ try {
   // Column already exists
 }
 
-// Widget state table
+// App state table (widgets are views into app state)
 db.exec(`
-  CREATE TABLE IF NOT EXISTS widget_state (
+  CREATE TABLE IF NOT EXISTS app_state (
     conversationId TEXT NOT NULL,
-    widgetId TEXT NOT NULL,
+    appId TEXT NOT NULL,
     state TEXT NOT NULL,
     version INTEGER DEFAULT 1,
     updatedAt TEXT NOT NULL,
-    PRIMARY KEY (conversationId, widgetId)
+    PRIMARY KEY (conversationId, appId)
   )
 `);
+
+// Migration: rename old tables/columns
+try {
+  db.exec(`ALTER TABLE widget_state RENAME TO app_state`);
+} catch {
+  // Table already renamed or doesn't exist
+}
+try {
+  db.exec(`ALTER TABLE app_state RENAME COLUMN widgetStateId TO appId`);
+} catch {
+  // Column already renamed or doesn't exist
+}
+try {
+  db.exec(`ALTER TABLE app_state RENAME COLUMN widgetId TO appId`);
+} catch {
+  // Column already renamed or doesn't exist
+}
 
 // Session table for authenticated devices
 db.exec(`
@@ -104,18 +121,18 @@ export function updateMessage(id: string, content: string): Message | null {
   };
 }
 
-export interface WidgetState {
+export interface AppState {
   conversationId: string;
-  widgetId: string;
+  appId: string;
   state: unknown;
   version: number;
   updatedAt: string;
 }
 
-export function getWidgetState(conversationId: string, widgetId: string): WidgetState | null {
-  const row = db.prepare('SELECT * FROM widget_state WHERE conversationId = ? AND widgetId = ?').get(conversationId, widgetId) as {
+export function getAppState(conversationId: string, appId: string): AppState | null {
+  const row = db.prepare('SELECT * FROM app_state WHERE conversationId = ? AND appId = ?').get(conversationId, appId) as {
     conversationId: string;
-    widgetId: string;
+    appId: string;
     state: string;
     version: number;
     updatedAt: string;
@@ -127,18 +144,18 @@ export function getWidgetState(conversationId: string, widgetId: string): Widget
   };
 }
 
-export function setWidgetState(conversationId: string, widgetId: string, state: unknown, version: number = 1): WidgetState {
+export function setAppState(conversationId: string, appId: string, state: unknown, version: number = 1): AppState {
   const updatedAt = new Date().toISOString();
   const stmt = db.prepare(`
-    INSERT INTO widget_state (conversationId, widgetId, state, version, updatedAt)
+    INSERT INTO app_state (conversationId, appId, state, version, updatedAt)
     VALUES (?, ?, ?, ?, ?)
-    ON CONFLICT(conversationId, widgetId) DO UPDATE SET
+    ON CONFLICT(conversationId, appId) DO UPDATE SET
       state = excluded.state,
       version = excluded.version,
       updatedAt = excluded.updatedAt
   `);
-  stmt.run(conversationId, widgetId, JSON.stringify(state), version, updatedAt);
-  return { conversationId, widgetId, state, version, updatedAt };
+  stmt.run(conversationId, appId, JSON.stringify(state), version, updatedAt);
+  return { conversationId, appId, state, version, updatedAt };
 }
 
 // ===================
