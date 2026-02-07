@@ -2,27 +2,18 @@ services:
   server:
     image: node:20-alpine
     working_dir: /opt/clawchat
-    command: sh -c "corepack enable && pnpm install && (pnpm --filter @clawchat/fake-agent dev &) && pnpm --filter @clawchat/server dev"
+    command: >-
+      sh -c "corepack enable && pnpm install &&
+      if [ \"$$RUN_FAKE_AGENT\" = 'true' ]; then (pnpm --filter @clawchat/fake-agent dev &); fi &&
+      pnpm --filter @clawchat/server dev"
     environment:
-      - PUBLIC_HOST=0.0.0.0
-      - AGENT_PORT=3100
-      - PUBLIC_PORT=3101
-      - DB_PATH=/opt/clawchat/server/data/chat.db
-      - UPLOADS_DIR=/opt/clawchat/server/data/uploads
-      - APPS_DIR=/opt/clawchat/apps
-      - CLIENT_DIST=/opt/clawchat/client/dist
-      - AGENT_URL=http://127.0.0.1:3200
-      - FAKE_AGENT_PORT=3200
-      - FAKE_AGENT_CHAT_URL=http://127.0.0.1:3100
-      - VAPID_PUBLIC_KEY=${VAPID_PUBLIC_KEY:-}
-      - VAPID_PRIVATE_KEY=${VAPID_PRIVATE_KEY:-}
-      - VAPID_SUBJECT=${VAPID_SUBJECT:-mailto:admin@localhost}
-      - PROMPT_LIST_FILE=/opt/clawchat/prompt-list.txt
+      - RUN_FAKE_AGENT=${RUN_FAKE_AGENT:-false}
     ports:
       - "3100:3100"
       - "3101:3101"
     volumes:
       - .:/opt/clawchat
+      - ../eliezer/prompts:/opt/clawchat/prompts-shared
       - server_store:/opt/clawchat/.pnpm-store
       - server_root_modules:/opt/clawchat/node_modules
       - server_modules:/opt/clawchat/server/node_modules

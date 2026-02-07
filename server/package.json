@@ -13,6 +13,7 @@
     "@clawchat/shared": "workspace:*",
     "better-sqlite3": "^11.0.0",
     "cookie-parser": "^1.4.6",
+    "dotenv": "^17.2.4",
     "express": "^4.18.2",
     "multer": "^2.0.2",
     "qrcode-terminal": "^0.12.0",

@@ -1,8 +1,15 @@
-.PHONY: dev build typecheck lint clean install setup-push
+.PHONY: dev build typecheck lint clean install setup-push connect-mock-agent connect-dev-agent
 
 # Development
-dev:
-	docker compose up
+dev: connect-mock-agent
+
+connect-mock-agent:
+	cp .env.mock .env
+	docker compose down && docker compose up -d
+
+connect-dev-agent:
+	cp .env.dev .env
+	docker compose down && docker compose up -d
 
 # Type checking
 typecheck:

@@ -1,3 +1,6 @@
+import dotenv from 'dotenv';
+dotenv.config({ path: '../.env' });
+
 import express, { Request, Response, NextFunction } from 'express';
 import multer from 'multer';
 import path from 'path';
@@ -19,7 +22,7 @@ const publicPort = requireEnv('PUBLIC_PORT');
 const uploadsDir = requireEnv('UPLOADS_DIR');
 const appsDir = requireEnv('APPS_DIR');
 const clientDist = requireEnv('CLIENT_DIST');
-const agentUrl = process.env.AGENT_URL; // Optional - agent may not be running
+const agentUrl = requireEnv('AGENT_URL');
 const promptListFile = process.env.PROMPT_LIST_FILE; // Optional - path to prompt-list.txt
 
 // ===================
@@ -33,7 +36,6 @@ interface AgentEvent {
 }
 
 function notifyAgent(type: string, payload: unknown): void {
-  if (!agentUrl) return;
 
   const event: AgentEvent = {
     source: 'chat',
@@ -366,6 +368,19 @@ publicApp.get('/api/health', (req, res) => {
   res.json({ status: 'ok', api: 'public' });
 });
 
+// Agent info proxy (forward to agent's /info/* endpoints)
+for (const endpoint of ['health', 'state', 'memory']) {
+  publicApp.get(`/api/agent/${endpoint}`, async (req, res) => {
+    try {
+      const r = await fetch(`${agentUrl}/info/${endpoint}`, { signal: AbortSignal.timeout(3000) });
+      const data = await r.json();
+      res.status(r.status).json(data);
+    } catch {
+      res.status(502).json({ error: 'Agent unreachable' });
+    }
+  });
+}
+
 // ===================
 // Push notification endpoints
 // ===================
@@ -538,7 +553,7 @@ publicApp.get('/api/events', (req, res) => {
 
   // Send initial agent status to this client
   if (agentUrl) {
-    fetch(`${agentUrl}/health`, { signal: AbortSignal.timeout(2000) })
+    fetch(`${agentUrl}/info/health`, { signal: AbortSignal.timeout(2000) })
       .then((r) => {
         res.write(`data: ${JSON.stringify({ type: SSEEventType.AGENT_STATUS, connected: r.ok })}\n\n`);
       })
@@ -866,8 +881,9 @@ publicApp.get('*', (req, res) => {
 // Initialize push notifications
 initPush();
 
-agentApp.listen(Number(agentPort), '127.0.0.1', () => {
-  console.log(`Agent API running on 127.0.0.1:${agentPort}`);
+const agentHost = process.env.AGENT_HOST || '127.0.0.1';
+agentApp.listen(Number(agentPort), agentHost, () => {
+  console.log(`Agent API running on ${agentHost}:${agentPort}`);
 });
 
 const publicHost = requireEnv('PUBLIC_HOST');

@@ -1,5 +1,8 @@
 #!/usr/bin/env tsx
 
+import dotenv from 'dotenv';
+dotenv.config({ path: '../.env' });
+
 import qrcode from 'qrcode-terminal';
 import { createInvite } from './db.js';
 

@@ -1,7 +1,7 @@
 import { createSignal, onMount, Show, For, createEffect } from 'solid-js';
 import { usePushNotifications } from '../hooks/usePushNotifications';
 
-type Tab = 'notifications' | 'prompts' | 'account';
+type Tab = 'notifications' | 'prompts' | 'agent' | 'account';
 
 interface SettingsModalProps {
   onClose: () => void;
@@ -86,7 +86,60 @@ export default function SettingsModal(props: SettingsModalProps) {
     }
   };
 
+  // Agent info state
+  const [agentState, setAgentState] = createSignal<Record<string, unknown> | null>(null);
+  const [agentMemory, setAgentMemory] = createSignal<Record<string, unknown> | null>(null);
+  const [agentError, setAgentError] = createSignal<string | null>(null);
+  const [agentLoading, setAgentLoading] = createSignal(false);
+
+  const fetchAgentInfo = async () => {
+    setAgentLoading(true);
+    setAgentError(null);
+    try {
+      const [stateRes, memoryRes] = await Promise.all([
+        fetch('/api/agent/state'),
+        fetch('/api/agent/memory'),
+      ]);
+      if (!stateRes.ok || !memoryRes.ok) {
+        const err = !stateRes.ok ? await stateRes.json() : await memoryRes.json();
+        setAgentError(err.error || 'Failed to fetch agent info');
+        return;
+      }
+      setAgentState(await stateRes.json());
+      setAgentMemory(await memoryRes.json());
+    } catch {
+      setAgentError('Agent unreachable');
+    } finally {
+      setAgentLoading(false);
+    }
+  };
+
+  createEffect(() => {
+    if (activeTab() === 'agent') fetchAgentInfo();
+  });
+
   const ucFirst = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
+  const fmtTokens = (n: number) => n >= 1000 ? `${Math.round(n / 1000)}k` : String(n);
+
+  const fmtTimestamp = (ts: string) => {
+    const d = new Date(ts.includes('T') ? ts : ts.replace(' ', 'T') + 'Z');
+    const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    const date = `${d.getDate()} ${months[d.getMonth()]} ${d.getFullYear()} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
+    const diffMs = Date.now() - d.getTime();
+    const diffMins = Math.floor(diffMs / 60000);
+    let ago: string;
+    if (diffMins < 1) ago = 'just now';
+    else if (diffMins < 60) ago = `${diffMins}m ago`;
+    else if (diffMs < 86400000) {
+      const h = Math.floor(diffMins / 60);
+      const m = diffMins % 60;
+      ago = `${h}h:${String(m).padStart(2,'0')}m ago`;
+    } else {
+      const days = Math.floor(diffMs / 86400000);
+      ago = `${days} day${days > 1 ? 's' : ''} ago`;
+    }
+    return `${date} - ${ago}`;
+  };
 
   let linesRef: HTMLDivElement | undefined;
 
@@ -145,6 +198,12 @@ export default function SettingsModal(props: SettingsModalProps) {
               Prompts
             </button>
           </Show>
+          <button
+            class={`settings-tab ${activeTab() === 'agent' ? 'settings-tab--active' : ''}`}
+            onClick={() => setActiveTab('agent')}
+          >
+            Agent
+          </button>
           <button
             class={`settings-tab ${activeTab() === 'account' ? 'settings-tab--active' : ''}`}
             onClick={() => setActiveTab('account')}
@@ -210,6 +269,150 @@ export default function SettingsModal(props: SettingsModalProps) {
                   spellcheck={false}
                 />
               </div>
+            </div>
+          </Show>
+
+          <Show when={activeTab() === 'agent'}>
+            <div class="settings-section">
+              <div class="settings-agent-header">
+                <span class="settings-row-title">Agent Info</span>
+                <button class="settings-agent-refresh" onClick={fetchAgentInfo} disabled={agentLoading()}>
+                  {agentLoading() ? 'Loading...' : 'Refresh'}
+                </button>
+              </div>
+              <Show when={agentError()}>
+                <div class="settings-agent-error">{agentError()}</div>
+              </Show>
+              <Show when={agentState()}>
+                <div class="settings-agent-group">
+                  <h4 class="settings-agent-group-title">State</h4>
+                  <div class="settings-agent-grid">
+                    <div class="settings-agent-item">
+                      <span class="settings-agent-label">Status</span>
+                      <span class={`settings-agent-badge settings-agent-badge--${(agentState() as any).state}`}>
+                        {(agentState() as any).state}
+                      </span>
+                    </div>
+                    <Show when={(agentState() as any).currentEvent}>
+                      <div class="settings-agent-item">
+                        <span class="settings-agent-label">Current Event</span>
+                        <span class="settings-agent-value">
+                          {(agentState() as any).currentEvent.source}/{(agentState() as any).currentEvent.type}
+                        </span>
+                      </div>
+                    </Show>
+                    <div class="settings-agent-item">
+                      <span class="settings-agent-label">Queue Depth</span>
+                      <span class="settings-agent-value">{(agentState() as any).queueDepth}</span>
+                    </div>
+                    <div class="settings-agent-item">
+                      <span class="settings-agent-label">Tokens Used</span>
+                      <span class="settings-agent-value">{((agentState() as any).tokensUsed).toLocaleString()}</span>
+                    </div>
+                  </div>
+                </div>
+              </Show>
+              <Show when={agentMemory()}>
+                {(() => {
+                  const m = agentMemory() as any;
+                  const ctx = m.context;
+                  return (
+                    <>
+                      <div class="settings-agent-group">
+                        <h4 class="settings-agent-group-title">Context</h4>
+                        <div class="settings-context-bar-wrapper">
+                          <div class="settings-context-bar">
+                            <Show when={ctx.flow.tokens > 0}>
+                              <div
+                                class="settings-context-segment settings-context-segment--flow"
+                                style={{ width: `max(4px, ${(ctx.flow.tokens / ctx.budget * 100)}%)` }}
+                                title={`Flow: ${fmtTokens(ctx.flow.tokens)} tokens (${ctx.flow.pct}%)`}
+                              />
+                            </Show>
+                            <Show when={ctx.compacted.tokens > 0}>
+                              <div
+                                class="settings-context-segment settings-context-segment--compacted"
+                                style={{ width: `max(4px, ${(ctx.compacted.tokens / ctx.budget * 100)}%)` }}
+                                title={`Compacted: ${fmtTokens(ctx.compacted.tokens)} tokens (${ctx.compacted.pct}%)`}
+                              />
+                            </Show>
+                            <Show when={ctx.memory.tokens > 0}>
+                              <div
+                                class="settings-context-segment settings-context-segment--memory"
+                                style={{ width: `max(4px, ${(ctx.memory.tokens / ctx.budget * 100)}%)` }}
+                                title={`Memory: ${fmtTokens(ctx.memory.tokens)} tokens (${ctx.memory.pct}%)`}
+                              />
+                            </Show>
+                            <Show when={ctx.system.tokens > 0}>
+                              <div
+                                class="settings-context-segment settings-context-segment--system"
+                                style={{ width: `max(4px, ${(ctx.system.tokens / ctx.budget * 100)}%)` }}
+                                title={`System: ${fmtTokens(ctx.system.tokens)} tokens (${ctx.system.pct}%)`}
+                              />
+                            </Show>
+                          </div>
+                          <div class="settings-context-bar-label">
+                            {ctx.total.pct}% of {fmtTokens(ctx.budget)} tokens
+                          </div>
+                        </div>
+                        <div class="settings-context-legend">
+                          <div class="settings-context-legend-item">
+                            <span class="settings-context-dot settings-context-dot--flow" />
+                            <span class="settings-context-legend-label">Flow</span>
+                            <span class="settings-context-legend-value">{fmtTokens(ctx.flow.tokens)} tokens</span>
+                          </div>
+                          <div class="settings-context-legend-item">
+                            <span class="settings-context-dot settings-context-dot--compacted" />
+                            <span class="settings-context-legend-label">Compacted</span>
+                            <span class="settings-context-legend-value">{fmtTokens(ctx.compacted.tokens)} tokens</span>
+                          </div>
+                          <div class="settings-context-legend-item">
+                            <span class="settings-context-dot settings-context-dot--memory" />
+                            <span class="settings-context-legend-label">Memory</span>
+                            <span class="settings-context-legend-value">{fmtTokens(ctx.memory.tokens)} tokens</span>
+                          </div>
+                          <div class="settings-context-legend-item">
+                            <span class="settings-context-dot settings-context-dot--system" />
+                            <span class="settings-context-legend-label">System</span>
+                            <span class="settings-context-legend-value">{fmtTokens(ctx.system.tokens)} tokens</span>
+                          </div>
+                        </div>
+                      </div>
+                      <div class="settings-agent-group">
+                        <h4 class="settings-agent-group-title">History</h4>
+                        <div class="settings-agent-grid">
+                          <div class="settings-agent-item">
+                            <span class="settings-agent-label">Archived Messages</span>
+                            <span class="settings-agent-value">{m.archived.messages}</span>
+                          </div>
+                        </div>
+                      </div>
+                      <For each={[['Compressions', m.ops.compressions], ['Distillations', m.ops.distillations]] as [string, string[]][]}>
+                        {([label, timestamps]) => (
+                          <div class="settings-agent-group">
+                            <h4 class="settings-agent-group-title">{label}</h4>
+                            <div class="settings-agent-grid">
+                              <Show when={timestamps.length > 0} fallback={
+                                <div class="settings-agent-item">
+                                  <span class="settings-agent-ts">None yet</span>
+                                </div>
+                              }>
+                                <For each={timestamps}>
+                                  {(ts: string) => (
+                                    <div class="settings-agent-item">
+                                      <span class="settings-agent-ts">{fmtTimestamp(ts)}</span>
+                                    </div>
+                                  )}
+                                </For>
+                              </Show>
+                            </div>
+                          </div>
+                        )}
+                      </For>
+                    </>
+                  );
+                })()}
+              </Show>
             </div>
           </Show>
 
