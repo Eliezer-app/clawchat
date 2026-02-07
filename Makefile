@@ -1,4 +1,4 @@
-.PHONY: dev build typecheck lint clean install setup-push connect-mock-agent connect-dev-agent
+.PHONY: dev build typecheck lint clean install push-setup push-rotate-keys connect-mock-agent connect-dev-agent
 
 # Development
 dev: connect-mock-agent
@@ -55,7 +55,7 @@ clean:
 	rm -rf client/dist server/dist
 
 # Setup push notifications (generate VAPID keys and add to .env)
-setup-push:
+push-setup:
 	@if [ -f .env ] && grep -q "VAPID_PUBLIC_KEY" .env; then \
 		echo "VAPID keys already exist in .env"; \
 	else \
@@ -72,3 +72,16 @@ setup-push:
 		echo "Restarting server..."; \
 		docker compose restart server; \
 	fi
+
+# Rotate VAPID keys (replaces existing keys in .env and restarts server)
+push-rotate-keys:
+	@echo "Generating new VAPID keys..."
+	@KEYS=$$(docker compose exec server npx web-push generate-vapid-keys --json 2>/dev/null); \
+	PUBLIC=$$(echo "$$KEYS" | grep -o '"publicKey":"[^"]*"' | cut -d'"' -f4); \
+	PRIVATE=$$(echo "$$KEYS" | grep -o '"privateKey":"[^"]*"' | cut -d'"' -f4); \
+	if [ -z "$$PUBLIC" ] || [ -z "$$PRIVATE" ]; then echo "Failed to generate keys"; exit 1; fi; \
+	sed -i '' 's|^VAPID_PUBLIC_KEY=.*|VAPID_PUBLIC_KEY='"$$PUBLIC"'|' .env; \
+	sed -i '' 's|^VAPID_PRIVATE_KEY=.*|VAPID_PRIVATE_KEY='"$$PRIVATE"'|' .env; \
+	echo "VAPID keys rotated in .env"; \
+	echo "Restarting server..."; \
+	docker compose restart server
