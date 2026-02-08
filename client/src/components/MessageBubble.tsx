@@ -73,7 +73,7 @@ export default function MessageBubble(props: MessageBubbleProps) {
           )}
         </Show>
       </div>
-      <span class="time">{formatTime(msg.createdAt)}</span>
+      <a class="time" href={`#msg-${msg.id}`}>{formatTime(msg.createdAt)}</a>
     </div>
   );
 }

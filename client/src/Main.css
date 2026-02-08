@@ -754,14 +754,92 @@ body {
   display: block;
 }
 
-.message-link {
+/* Markdown content */
+.markdown {
+  display: inline;
+}
+
+.markdown p {
+  margin: 0;
+}
+
+.markdown p + p {
+  margin-top: 0.5em;
+}
+
+.markdown a {
   color: inherit;
   text-decoration: underline;
   word-break: break-all;
 }
 
-.message-link:hover {
+.markdown a:hover {
   opacity: 0.8;
+}
+
+.markdown img {
+  cursor: pointer;
+}
+
+.markdown code {
+  background: rgba(0, 0, 0, 0.1);
+  padding: 1px 5px;
+  border-radius: 4px;
+  font-size: 0.9em;
+}
+
+.markdown pre {
+  background: #1e1e1e;
+  color: #d4d4d4;
+  padding: 10px 14px;
+  border-radius: 8px;
+  overflow-x: auto;
+  margin: 8px 0;
+  font-size: 0.85em;
+}
+
+.markdown pre code {
+  background: none;
+  padding: 0;
+}
+
+.markdown blockquote {
+  border-left: 3px solid rgba(128, 128, 128, 0.4);
+  margin: 4px 0;
+  padding: 2px 12px;
+  color: inherit;
+  opacity: 0.85;
+}
+
+.markdown ul, .markdown ol {
+  margin: 4px 0;
+  padding-left: 1.5em;
+}
+
+.markdown h1, .markdown h2, .markdown h3 {
+  margin: 8px 0 4px;
+  line-height: 1.3;
+}
+
+.markdown h1 { font-size: 1.3em; }
+.markdown h2 { font-size: 1.15em; }
+.markdown h3 { font-size: 1.05em; }
+
+.markdown hr {
+  border: none;
+  border-top: 1px solid rgba(128, 128, 128, 0.3);
+  margin: 8px 0;
+}
+
+.markdown table {
+  border-collapse: collapse;
+  margin: 8px 0;
+  font-size: 0.9em;
+}
+
+.markdown th, .markdown td {
+  border: 1px solid rgba(128, 128, 128, 0.3);
+  padding: 4px 8px;
 }
 
 .code-block {
@@ -905,6 +983,7 @@ span + .widget-container {
   color: #999;
   margin-top: 4px;
   padding: 0 4px;
+  text-decoration: none;
 }
 
 .delete-btn {
@@ -1452,5 +1531,8 @@ span + .widget-container {
   .annotation pre {
     background: #2a2a2a;
     color: #ccc;
+  }
+  .markdown code {
+    background: rgba(255, 255, 255, 0.1);
   }
 }

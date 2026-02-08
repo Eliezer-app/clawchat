@@ -13,7 +13,7 @@ services:
       - "3101:3101"
     volumes:
       - .:/opt/clawchat
-      - ../eliezer/prompts:/opt/clawchat/prompts-shared
+      - ../eliezer:/opt/eliezer
       - server_store:/opt/clawchat/.pnpm-store
       - server_root_modules:/opt/clawchat/node_modules
       - server_modules:/opt/clawchat/server/node_modules

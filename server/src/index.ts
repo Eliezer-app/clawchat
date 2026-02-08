@@ -23,7 +23,8 @@ const uploadsDir = requireEnv('UPLOADS_DIR');
 const appsDir = requireEnv('APPS_DIR');
 const clientDist = requireEnv('CLIENT_DIST');
 const agentUrl = requireEnv('AGENT_URL');
-const promptsLocationFile = process.env.PROMPTS_LOCATION_FILE; // Optional - path to prompts-location.txt
+const promptsDir = process.env.PROMPTS_DIR || '';
+const chatPublicDir = process.env.CHAT_PUBLIC_DIR || '';
 
 // ===================
 // Agent Notification
@@ -579,6 +580,9 @@ publicApp.use(authMiddleware);
 // Serve uploaded files (now protected)
 publicApp.use('/api/files', express.static(uploadsDir));
 
+// Serve chat-public files (agent-provided static assets like images)
+if (chatPublicDir) publicApp.use('/chat-public', express.static(chatPublicDir));
+
 // Serve frontend static files (protected by auth middleware above)
 publicApp.use(express.static(clientDist));
 
@@ -701,22 +705,10 @@ interface PromptInfo {
   description?: string;
 }
 
-function getPromptsDir(): string | null {
-  if (!promptsLocationFile) return null;
-  try {
-    const dir = fs.readFileSync(promptsLocationFile, 'utf-8').trim();
-    if (path.isAbsolute(dir)) return dir;
-    return path.resolve(path.dirname(promptsLocationFile), dir);
-  } catch {
-    return null;
-  }
-}
-
 function getPromptList(): PromptInfo[] {
-  const dir = getPromptsDir();
-  if (!dir) return [];
+  if (!promptsDir) return [];
   try {
-    return fs.readdirSync(dir)
+    return fs.readdirSync(promptsDir)
       .filter(f => f.endsWith('.md') && !f.endsWith('.description.md'))
       .sort((a, b) => {
         const order = ['system.md', 'user.md', 'memory.md'];
@@ -729,10 +721,10 @@ function getPromptList(): PromptInfo[] {
       })
       .map(f => {
         const name = path.basename(f, '.md');
-        const descPath = path.join(dir, `${name}.description.txt`);
+        const descPath = path.join(promptsDir, `${name}.description.txt`);
         let description: string | undefined;
         try { description = fs.readFileSync(descPath, 'utf-8').trim(); } catch {}
-        return { name, path: path.join(dir, f), description };
+        return { name, path: path.join(promptsDir, f), description };
       });
   } catch {
     return [];

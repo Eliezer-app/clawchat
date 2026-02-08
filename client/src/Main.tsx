@@ -1,6 +1,7 @@
 import { createSignal, onMount, For, createEffect, Show, Switch, Match, JSX } from 'solid-js';
 import { SSEEventType, WidgetApi } from '@clawchat/shared';
 import type { Message } from '@clawchat/shared';
+import { marked } from 'marked';
 import CodeBlock from './components/CodeBlock';
 import Widget from './components/Widget';
 import MessageBubble from './components/MessageBubble';
@@ -11,6 +12,8 @@ import { AuthChecking, AuthLocked } from './components/AuthScreens';
 import Toast from './components/Toast';
 import { useActivityTracking } from './hooks/useActivityTracking';
 import './Main.css';
+
+marked.use({ breaks: true, gfm: true });
 
 export default function Main() {
   const [authState, setAuthState] = createSignal<'checking' | 'authenticated' | 'unauthenticated'>('checking');
@@ -204,14 +207,9 @@ export default function Main() {
     setShowSettings(false);
   };
 
-  const linkify = (text: string): JSX.Element[] => {
-    const urlRegex = /(https?:\/\/[^\s<>\"')\]]+[^\s<>\"')\].,;:!?])/g;
-    const parts = text.split(urlRegex);
-    return parts.map((part) =>
-      urlRegex.test(part)
-        ? <a href={part} target="_blank" rel="noopener noreferrer" class="message-link">{part}</a>
-        : <span>{part}</span>
-    ) as JSX.Element[];
+  const renderMarkdown = (text: string) => {
+    const html = marked.parse(text, { async: false }) as string;
+    return <div class="markdown" innerHTML={html} />;
   };
 
   const renderContent = (text: string, conversationId: string): JSX.Element[] => {
@@ -236,7 +234,7 @@ export default function Main() {
 
     return parts.map((part) =>
       typeof part === 'string'
-        ? linkify(part)
+        ? renderMarkdown(part)
         : part.lang === 'widget'
           ? <Widget code={part.code} conversationId={conversationId} />
           : <CodeBlock lang={part.lang} code={part.code} />
@@ -269,7 +267,10 @@ export default function Main() {
               />
             </Show>
 
-            <div class="messages" ref={messagesContainer}>
+            <div class="messages" ref={messagesContainer} onClick={(e) => {
+              const img = (e.target as HTMLElement).closest('.markdown img') as HTMLImageElement;
+              if (img) openLightbox(img.src, img.alt || 'image');
+            }}>
               {messages().length === 0 ? (
                 <div class="empty">No messages yet</div>
               ) : (
