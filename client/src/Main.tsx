@@ -173,6 +173,8 @@ export default function Main() {
     await Promise.all(ids.map(id => fetch(`/api/messages/${id}`, { method: 'DELETE' })));
   };
 
+  const stopAgent = () => { fetch('/api/stop', { method: 'POST' }); };
+
   const isInternal = (m: Message) => m.role === 'agent' && m.type && m.type !== 'message';
 
   const formatToolCall = (content: string): { tool: string; args: string } => {
@@ -281,10 +283,14 @@ export default function Main() {
                       const prev = idx() > 0 ? messages()[idx() - 1] : undefined;
                       if (prev && isInternal(prev)) return null;
                       const group = () => getGroup(idx());
+                      const isLast = () => idx() + group().length >= messages().length;
                       return (
                         <details class="annotation">
                           <summary>
                             Internal work ({group().length})
+                            <Show when={isLast()}>
+                              <button class="annotation-stop" onClick={stopAgent}>Stop</button>
+                            </Show>
                             <button class="annotation-delete" onClick={() => deleteMessages(group().map(m => m.id))}>×</button>
                           </summary>
                           <For each={group()}>

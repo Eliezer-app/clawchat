@@ -4,7 +4,7 @@ import { wrapWidgetHtml } from '../widget';
 import { compensateScroll } from '../scrollAnchor';
 
 const MIN_HEIGHT = 60;
-const MAX_HEIGHT = 800;
+const MAX_HEIGHT = 5000;
 const DEFAULT_HEIGHT = 100;
 const PRELOAD_MARGIN = '200px';
 

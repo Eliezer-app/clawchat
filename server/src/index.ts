@@ -683,6 +683,15 @@ publicApp.post('/api/upload', upload.single('file'), (req, res) => {
   res.json(message);
 });
 
+publicApp.post('/api/stop', async (req, res) => {
+  try {
+    const r = await fetch(`${agentUrl}/stop`, { method: 'POST', signal: AbortSignal.timeout(5000) });
+    res.status(r.status).json(await r.json().catch(() => ({})));
+  } catch {
+    res.status(502).json({ error: 'Agent unreachable' });
+  }
+});
+
 publicApp.delete('/api/messages/:id', (req, res) => {
   const { id } = req.params;
   const message = getMessage(id);
