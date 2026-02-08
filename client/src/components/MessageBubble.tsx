@@ -25,8 +25,7 @@ export default function MessageBubble(props: MessageBubbleProps) {
 
   const getFileUrl = () => {
     if (!msg.attachment) return '';
-    const ext = msg.attachment.filename.split('.').pop() || '';
-    return `/api/files/${msg.attachment.id}.${ext}`;
+    return `/chat-public/${msg.attachment.filename}`;
   };
 
   const isImage = (mimetype: string) => mimetype.startsWith('image/');

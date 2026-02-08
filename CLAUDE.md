@@ -24,7 +24,7 @@ Public API: http://127.0.0.1:3101 (nginx proxies to this in prod)
 
 ## Agent API
 
-The Agent API is only accessible from inside the container. Use the helper script:
+The Agent API is local and unprotected (no auth). It is not published to the web. Use the helper script:
 
 ```bash
 # Update a message (content from file via stdin - no escaping needed)

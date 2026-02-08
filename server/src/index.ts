@@ -19,7 +19,6 @@ function requireEnv(name: string): string {
 
 const agentPort = requireEnv('AGENT_PORT');
 const publicPort = requireEnv('PUBLIC_PORT');
-const uploadsDir = requireEnv('UPLOADS_DIR');
 const appsDir = requireEnv('APPS_DIR');
 const clientDist = requireEnv('CLIENT_DIST');
 const agentUrl = requireEnv('AGENT_URL');
@@ -70,7 +69,7 @@ function notifyAgent(type: string, payload: unknown): void {
 }
 
 // Ensure data directories exist
-fs.mkdirSync(uploadsDir, { recursive: true });
+if (chatPublicDir) fs.mkdirSync(chatPublicDir, { recursive: true });
 
 // Expand widget file references in message content
 // Transforms ```widget:path/to/file.html``` to ```widget\n<file contents>```
@@ -100,13 +99,23 @@ function countWidgets(content: string): number {
   return (content.match(widgetRegex) || []).length;
 }
 
-// Configure multer for file uploads
+// Configure multer for file uploads — saves to chat-public with original filenames
+function resolveFilename(dir: string, original: string): string {
+  const ext = path.extname(original);
+  const base = path.basename(original, ext);
+  let name = original;
+  let n = 2;
+  while (fs.existsSync(path.join(dir, name))) {
+    name = `${base}(${n})${ext}`;
+    n++;
+  }
+  return name;
+}
+
 const storage = multer.diskStorage({
-  destination: uploadsDir,
+  destination: chatPublicDir,
   filename: (req, file, cb) => {
-    const id = crypto.randomUUID();
-    const ext = path.extname(file.originalname);
-    cb(null, `${id}${ext}`);
+    cb(null, resolveFilename(chatPublicDir, file.originalname));
   },
 });
 
@@ -229,8 +238,7 @@ agentApp.post('/upload', upload.single('file'), (req, res) => {
   let attachment: Attachment | undefined;
   if (file) {
     attachment = {
-      id: path.basename(file.filename, path.extname(file.filename)),
-      filename: file.originalname,
+      filename: file.filename,
       mimetype: file.mimetype,
       size: file.size,
     };
@@ -298,9 +306,6 @@ agentApp.get('/messages', (req, res) => {
 const publicApp = express();
 publicApp.use(express.json());
 publicApp.use(cookieParser());
-
-// Serve uploaded files (requires auth, handled below)
-// publicApp.use('/api/files', express.static(uploadsDir));
 
 // Serve frontend static files
 
@@ -577,10 +582,7 @@ publicApp.get('/invite', (req, res) => {
 // Apply auth middleware for remaining routes
 publicApp.use(authMiddleware);
 
-// Serve uploaded files (now protected)
-publicApp.use('/api/files', express.static(uploadsDir));
-
-// Serve chat-public files (agent-provided static assets like images)
+// Serve shared files (uploads + agent-provided assets)
 if (chatPublicDir) publicApp.use('/chat-public', express.static(chatPublicDir));
 
 // Serve frontend static files (protected by auth middleware above)
@@ -665,8 +667,7 @@ publicApp.post('/api/upload', upload.single('file'), (req, res) => {
   let attachment: Attachment | undefined;
   if (file) {
     attachment = {
-      id: path.basename(file.filename, path.extname(file.filename)),
-      filename: file.originalname,
+      filename: file.filename,
       mimetype: file.mimetype,
       size: file.size,
     };
@@ -677,7 +678,7 @@ publicApp.post('/api/upload', upload.single('file'), (req, res) => {
     conversationId: message.conversationId,
     messageId: message.id,
     content: message.content,
-    hasAttachment: !!attachment,
+    attachment,
   });
   res.json(message);
 });
