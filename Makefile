@@ -1,4 +1,4 @@
-.PHONY: dev build typecheck lint clean install push-setup push-rotate-keys connect-mock-agent connect-dev-agent
+.PHONY: dev build typecheck lint clean install push-setup push-rotate-keys connect-mock-agent connect-dev-agent api-docs
 
 # Development
 dev: connect-mock-agent
@@ -85,3 +85,7 @@ push-rotate-keys:
 	echo "VAPID keys rotated in .env"; \
 	echo "Restarting server..."; \
 	docker compose restart server
+
+# Print Agent API docs (extracted from source comments)
+api-docs:
+	@awk '/^[[:space:]]*\/\/ (GET|POST|PUT|PATCH|DELETE) \//{p=1} p{if(/^[[:space:]]*\/\//){sub(/^[[:space:]]*\/\/ ?/,"");print}else{p=0}}' server/src/index.ts

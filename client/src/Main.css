@@ -206,16 +206,17 @@ body {
   display: flex;
   flex-direction: column;
   gap: 2px;
+  font-size: 15px;
+  line-height: 1.4;
 }
 
 .settings-row-title {
   font-weight: 500;
-  font-size: 15px;
 }
 
 .settings-row-desc {
-  font-size: 13px;
-  color: #666;
+  font-size: 14px;
+  color: #8b8fa8;
 }
 
 .settings-status {
@@ -365,6 +366,39 @@ body {
   color: #92400e;
 }
 
+/* Toggle */
+.settings-toggle {
+  position: relative;
+  width: 40px;
+  height: 22px;
+  border-radius: 11px;
+  border: none;
+  background: #ccc;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: background 0.2s;
+}
+
+.settings-toggle::after {
+  content: '';
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: white;
+  transition: transform 0.2s;
+}
+
+.settings-toggle--on {
+  background: #6366f1;
+}
+
+.settings-toggle--on::after {
+  transform: translateX(18px);
+}
+
 /* Context bar */
 .settings-context-bar-wrapper {
   margin-bottom: 14px;
@@ -461,14 +495,18 @@ body {
 .settings-prompts {
   display: flex;
   flex-direction: column;
-  height: 100%;
-  min-height: 400px;
+  height: calc(100vh - 150px);
+  margin-bottom: 0;
 }
 
 .settings-prompts-header {
   display: flex;
   gap: 12px;
   margin-bottom: 12px;
+}
+
+.settings-prompts > .settings-row-desc {
+  margin: 4px 0 16px;
 }
 
 .settings-prompts-pills {
@@ -532,6 +570,7 @@ body {
   font-family: 'SF Mono', 'Consolas', 'Monaco', monospace;
   font-size: 13px;
   line-height: 1.5;
+  min-height: 0;
 }
 
 .settings-prompts-lines {
@@ -641,6 +680,71 @@ body {
   color: #1a1a1a;
   border: 1px solid #e5e5e5;
   border-bottom-left-radius: 4px;
+}
+
+.annotation {
+  font-size: 0.82rem;
+  line-height: 1.5;
+  color: #888;
+  max-width: 80%;
+  margin-bottom: 4px;
+}
+
+.annotation summary {
+  cursor: pointer;
+  color: #8b8fa8;
+  padding: 4px 0;
+}
+
+.annotation-delete {
+  background: none;
+  border: none;
+  color: #888;
+  cursor: pointer;
+  font-size: 0.9rem;
+  margin-left: 8px;
+  padding: 0 4px;
+  opacity: 0;
+}
+
+.annotation:hover .annotation-delete {
+  opacity: 1;
+}
+
+.annotation-item {
+  margin: 8px 0;
+}
+
+.annotation em {
+  display: block;
+  white-space: pre-wrap;
+  color: #666;
+}
+
+.tool-tag {
+  display: inline-block;
+  background: #dde4ee;
+  color: #556;
+  padding: 1px 8px;
+  border-radius: 4px;
+  font-size: 0.78rem;
+  font-weight: 500;
+}
+
+.annotation .tool-error {
+  color: #c44;
+}
+
+.annotation pre {
+  background: #f0f0f0;
+  padding: 8px 12px;
+  border-radius: 6px;
+  overflow-x: auto;
+  max-height: 18rem;
+  margin: 4px 0;
+  font-size: 0.78rem;
+  white-space: pre-wrap;
+  word-break: break-word;
 }
 
 .bubble img {
@@ -1257,7 +1361,7 @@ span + .widget-container {
     border-bottom-color: #444;
   }
   .settings-row-desc {
-    color: #999;
+    color: #9ba0be;
   }
   .settings-status {
     color: #888;
@@ -1293,6 +1397,12 @@ span + .widget-container {
     background: #451a03;
     color: #fcd34d;
   }
+  .settings-toggle {
+    background: #555;
+  }
+  .settings-toggle--on {
+    background: #6366f1;
+  }
   .settings-context-bar {
     background: #333;
   }
@@ -1304,5 +1414,43 @@ span + .widget-container {
   }
   .settings-context-legend-label {
     color: #999;
+  }
+  .settings-prompts-editor {
+    border-color: #444;
+  }
+  .settings-prompts-lines {
+    background: #1a1a1a;
+    border-right-color: #444;
+  }
+  .settings-prompts-textarea {
+    background: #2a2a2a;
+    color: #e0e0e0;
+  }
+  .settings-prompts-pill:not(.settings-prompts-pill--active) {
+    background: #333;
+    color: #ccc;
+  }
+  .settings-prompts-pill:hover:not(.settings-prompts-pill--active) {
+    background: #444;
+  }
+  .annotation {
+    color: #999;
+  }
+  .annotation summary {
+    color: #9ba0be;
+  }
+  .annotation em {
+    color: #aaa;
+  }
+  .tool-tag {
+    background: #3a4050;
+    color: #b0b8cc;
+  }
+  .annotation .tool-error {
+    color: #e66;
+  }
+  .annotation pre {
+    background: #2a2a2a;
+    color: #ccc;
   }
 }

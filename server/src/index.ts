@@ -23,7 +23,7 @@ const uploadsDir = requireEnv('UPLOADS_DIR');
 const appsDir = requireEnv('APPS_DIR');
 const clientDist = requireEnv('CLIENT_DIST');
 const agentUrl = requireEnv('AGENT_URL');
-const promptListFile = process.env.PROMPT_LIST_FILE; // Optional - path to prompt-list.txt
+const promptsLocationFile = process.env.PROMPTS_LOCATION_FILE; // Optional - path to prompts-location.txt
 
 // ===================
 // Agent Notification
@@ -128,19 +128,21 @@ setInterval(() => {
 }, 30000);
 
 // Helper to create and broadcast a message
-function createMessage(role: Message['role'], content: string, attachment?: Attachment): Message {
+function createMessage(role: Message['role'], content: string, opts?: { conversationId?: string; attachment?: Attachment; type?: Message['type']; name?: string }): Message {
   const message = addMessage({
     id: crypto.randomUUID(),
-    conversationId: 'default',
+    conversationId: opts?.conversationId || 'default',
     role,
+    type: opts?.type || 'message',
     content: content.trim(),
-    attachment,
+    name: opts?.name,
+    attachment: opts?.attachment,
     createdAt: new Date().toISOString(),
   });
   broadcast({ type: 'message', message: expandMessage(message) });
 
-  // Send push notification for agent messages
-  if (role === 'agent' && isPushEnabled()) {
+  // Send push notification for regular agent messages only
+  if (role === 'agent' && (opts?.type || 'message') === 'message' && isPushEnabled()) {
     const preview = content.length > 100 ? content.slice(0, 100) + '...' : content;
     sendPushToAll({
       title: 'ClawChat',
@@ -159,8 +161,16 @@ function createMessage(role: Message['role'], content: string, attachment?: Atta
 const agentApp = express();
 agentApp.use(express.json());
 
+	// POST /send — Send a message to chat.
+	//   Request body:
+	//     conversationId  string  — target conversation (e.g. "default")
+	//     content         string  — message content (text or JSON for typed messages)
+	//     type            string? — message type: "thought", "tool_call", "tool_result" (omit for regular message)
+	//     name            string? — tool name (for tool_call/tool_result)
+	//   Response:
+	//     messageId       string  — assigned message ID
 agentApp.post('/send', (req, res) => {
-  const { content } = req.body;
+  const { conversationId, content, type, name } = req.body;
   if (!content || typeof content !== 'string' || !content.trim()) {
     res.status(400).json({ error: 'Content required' });
     return;
@@ -169,18 +179,28 @@ agentApp.post('/send', (req, res) => {
     res.status(400).json({ error: 'Only one widget per message allowed' });
     return;
   }
-  // Auto-clear typing indicator when agent sends a message
-  broadcast({ type: SSEEventType.AGENT_TYPING, active: false });
-  const message = createMessage('agent', content.trim());
-  res.json(message);
+  // Auto-clear typing indicator when agent sends a final message
+  if (!type || type === 'message') {
+    broadcast({ type: SSEEventType.AGENT_TYPING, active: false });
+  }
+  const message = createMessage('agent', content.trim(), { conversationId, type, name });
+  res.json({ messageId: message.id });
 });
 
+	// POST /typing — Set typing indicator.
+	//   Request body:
+	//     active  boolean — true to show, false to hide
+	//   Response: { ok: true }
 agentApp.post('/typing', (req, res) => {
   const { active } = req.body;
   broadcast({ type: SSEEventType.AGENT_TYPING, active: !!active });
   res.json({ ok: true });
 });
 
+	// POST /scroll — Scroll chat to a message.
+	//   Request body:
+	//     messageId  string — message ID to scroll to
+	//   Response: { ok: true }
 agentApp.post('/scroll', (req, res) => {
   const { messageId } = req.body;
   if (!messageId || typeof messageId !== 'string') {
@@ -191,6 +211,11 @@ agentApp.post('/scroll', (req, res) => {
   res.json({ ok: true });
 });
 
+	// POST /upload — Send a message with file attachment (multipart/form-data).
+	//   Form fields:
+	//     file    file   — file to attach (optional)
+	//     content string — message text (optional, one of file/content required)
+	//   Response: { id, conversationId, role, content, attachment?, createdAt }
 agentApp.post('/upload', upload.single('file'), (req, res) => {
   const file = req.file;
   const content = (req.body.content as string) || '';
@@ -210,23 +235,29 @@ agentApp.post('/upload', upload.single('file'), (req, res) => {
     };
   }
 
-  const message = createMessage('agent', content.trim(), attachment);
+  const message = createMessage('agent', content.trim(), { attachment });
   res.json(message);
 });
 
+	// DELETE /messages/:id — Delete a message.
+	//   Response: { ok: true } or 404
 agentApp.delete('/messages/:id', (req, res) => {
   const { id } = req.params;
   const deleted = deleteMessage(id);
-  if (!deleted) {
-    res.status(404).json({ error: 'Message not found' });
-    return;
-  }
+  if (!deleted) { res.status(404).json({ error: 'Message not found' }); return; }
   broadcast({ type: 'delete', id });
   res.json({ ok: true });
 });
 
+	// PATCH /messages/:id — Update a message's content.
+	//   Request body:
+	//     content  string — new message text
+	//   Response: { id, conversationId, role, content, createdAt } or 404
 agentApp.patch('/messages/:id', (req, res) => {
   const { id } = req.params;
+  const existing = getMessage(id);
+  if (!existing) { res.status(404).json({ error: 'Message not found' }); return; }
+  if (existing.type !== 'message') { res.status(400).json({ error: 'Cannot edit internal messages' }); return; }
   const { content } = req.body;
   if (content === undefined || typeof content !== 'string') {
     res.status(400).json({ error: 'Content required' });
@@ -241,10 +272,15 @@ agentApp.patch('/messages/:id', (req, res) => {
   res.json(message);
 });
 
+	// GET /health — Health check.
+	//   status  string — "ok"
+	//   api     string — "agent"
 agentApp.get('/health', (req, res) => {
   res.json({ status: 'ok', api: 'agent' });
 });
 
+	// GET /messages?search= — List all messages, optionally filtered.
+	//   Message[] — id, conversationId, role, content, annotations, createdAt
 agentApp.get('/messages', (req, res) => {
   const search = req.query.search as string | undefined;
   let messages = getMessages();
@@ -380,6 +416,32 @@ for (const endpoint of ['health', 'state', 'memory']) {
     }
   });
 }
+
+// Cron proxy
+publicApp.get('/api/agent/cron', async (req, res) => {
+  try {
+    const r = await fetch(`${agentUrl}/cron`, { signal: AbortSignal.timeout(3000) });
+    const data = await r.json();
+    res.status(r.status).json(data);
+  } catch {
+    res.status(502).json({ error: 'Agent unreachable' });
+  }
+});
+
+publicApp.put('/api/agent/cron/:name/enabled', async (req, res) => {
+  try {
+    const r = await fetch(`${agentUrl}/cron/${encodeURIComponent(req.params.name)}/enabled`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(req.body),
+      signal: AbortSignal.timeout(3000),
+    });
+    const data = await r.json();
+    res.status(r.status).json(data);
+  } catch {
+    res.status(502).json({ error: 'Agent unreachable' });
+  }
+});
 
 // ===================
 // Push notification endpoints
@@ -606,7 +668,7 @@ publicApp.post('/api/upload', upload.single('file'), (req, res) => {
     };
   }
 
-  const message = createMessage('user', content, attachment);
+  const message = createMessage('user', content, { attachment });
   notifyAgent('user_message', {
     conversationId: message.conversationId,
     messageId: message.id,
@@ -619,10 +681,7 @@ publicApp.post('/api/upload', upload.single('file'), (req, res) => {
 publicApp.delete('/api/messages/:id', (req, res) => {
   const { id } = req.params;
   const message = getMessage(id);
-  if (!message) {
-    res.status(404).json({ error: 'Message not found' });
-    return;
-  }
+  if (!message) { res.status(404).json({ error: 'Message not found' }); return; }
   deleteMessage(id);
   broadcast({ type: 'delete', id });
   notifyAgent('message_deleted', {
@@ -639,35 +698,50 @@ publicApp.delete('/api/messages/:id', (req, res) => {
 interface PromptInfo {
   name: string;
   path: string;
+  description?: string;
+}
+
+function getPromptsDir(): string | null {
+  if (!promptsLocationFile) return null;
+  try {
+    const dir = fs.readFileSync(promptsLocationFile, 'utf-8').trim();
+    if (path.isAbsolute(dir)) return dir;
+    return path.resolve(path.dirname(promptsLocationFile), dir);
+  } catch {
+    return null;
+  }
 }
 
 function getPromptList(): PromptInfo[] {
-  if (!promptListFile) return [];
+  const dir = getPromptsDir();
+  if (!dir) return [];
   try {
-    const content = fs.readFileSync(promptListFile, 'utf-8');
-    const lines = content.split('\n').filter(line => line.trim());
-    return lines.map(line => {
-      const filePath = line.trim();
-      const name = path.basename(filePath, '.md');
-      return { name, path: filePath };
-    });
+    return fs.readdirSync(dir)
+      .filter(f => f.endsWith('.md') && !f.endsWith('.description.md'))
+      .sort((a, b) => {
+        const order = ['system.md', 'user.md', 'memory.md'];
+        const ai = order.indexOf(a);
+        const bi = order.indexOf(b);
+        if (ai !== -1 && bi !== -1) return ai - bi;
+        if (ai !== -1) return -1;
+        if (bi !== -1) return 1;
+        return a.localeCompare(b);
+      })
+      .map(f => {
+        const name = path.basename(f, '.md');
+        const descPath = path.join(dir, `${name}.description.txt`);
+        let description: string | undefined;
+        try { description = fs.readFileSync(descPath, 'utf-8').trim(); } catch {}
+        return { name, path: path.join(dir, f), description };
+      });
   } catch {
     return [];
   }
 }
 
-function resolvePromptPath(promptPath: string): string {
-  // If absolute, use as-is; otherwise resolve relative to project root (parent of prompt-list.txt)
-  if (path.isAbsolute(promptPath)) {
-    return promptPath;
-  }
-  const projectRoot = path.dirname(promptListFile || '');
-  return path.resolve(projectRoot, promptPath);
-}
-
 publicApp.get('/api/prompts', (req, res) => {
   const prompts = getPromptList();
-  res.json(prompts.map(p => ({ name: p.name })));
+  res.json(prompts.map(p => ({ name: p.name, description: p.description })));
 });
 
 publicApp.get('/api/prompts/:name', (req, res) => {
@@ -681,7 +755,7 @@ publicApp.get('/api/prompts/:name', (req, res) => {
   }
 
   try {
-    const fullPath = resolvePromptPath(prompt.path);
+    const fullPath = prompt.path;
     const content = fs.readFileSync(fullPath, 'utf-8');
     res.json({ name: prompt.name, content });
   } catch {
@@ -707,7 +781,7 @@ publicApp.put('/api/prompts/:name', (req, res) => {
   }
 
   try {
-    const fullPath = resolvePromptPath(prompt.path);
+    const fullPath = prompt.path;
     fs.writeFileSync(fullPath, content, 'utf-8');
     res.json({ ok: true });
   } catch (err) {

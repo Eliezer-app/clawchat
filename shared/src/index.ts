@@ -7,11 +7,15 @@ export interface Attachment {
   size: number;
 }
 
+export type MessageType = 'message' | 'thought' | 'tool_call' | 'tool_result';
+
 export interface Message {
   id: string;
   conversationId: string;
   role: 'user' | 'agent';
+  type: MessageType;
   content: string;
+  name?: string; // tool name for tool_call/tool_result
   attachment?: Attachment;
   createdAt: string; // ISO 8601
 }

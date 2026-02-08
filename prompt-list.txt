@@ -1,3 +1,0 @@
-prompts-shared/system.md
-prompts-shared/user.md
-prompts-shared/memory.md

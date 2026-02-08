@@ -1,7 +1,7 @@
 import Database from 'better-sqlite3';
 import fs from 'fs';
 import path from 'path';
-import type { Message, Attachment } from '@clawchat/shared';
+import type { Message, Attachment, MessageType } from '@clawchat/shared';
 
 let _db: Database.Database | undefined;
 
@@ -65,6 +65,10 @@ function migrate(db: Database.Database) {
   try { db.exec(`ALTER TABLE sessions ADD COLUMN lastActiveAt TEXT`); } catch {}
   try { db.exec(`ALTER TABLE sessions ADD COLUMN isVisible INTEGER DEFAULT 0`); } catch {}
 
+  try { db.exec(`ALTER TABLE messages ADD COLUMN annotations TEXT`); } catch {}
+  try { db.exec(`ALTER TABLE messages ADD COLUMN type TEXT NOT NULL DEFAULT 'message'`); } catch {}
+  try { db.exec(`ALTER TABLE messages ADD COLUMN name TEXT`); } catch {}
+
   db.exec(`
     CREATE TABLE IF NOT EXISTS push_subscriptions (
       id TEXT PRIMARY KEY,
@@ -81,35 +85,41 @@ interface DbMessage {
   id: string;
   conversationId: string;
   role: 'user' | 'agent';
+  type: MessageType;
   content: string;
+  name: string | null;
   attachment: string | null;
   createdAt: string;
 }
 
+function parseDbMessage(row: DbMessage): Message {
+  return {
+    ...row,
+    name: row.name ?? undefined,
+    attachment: row.attachment ? JSON.parse(row.attachment) as Attachment : undefined,
+  };
+}
+
 export function getMessages(): Message[] {
   const rows = db().prepare('SELECT * FROM messages ORDER BY createdAt ASC').all() as DbMessage[];
-  return rows.map(row => ({
-    ...row,
-    attachment: row.attachment ? JSON.parse(row.attachment) as Attachment : undefined,
-  }));
+  return rows.map(parseDbMessage);
 }
 
 export function getMessage(id: string): Message | null {
   const row = db().prepare('SELECT * FROM messages WHERE id = ?').get(id) as DbMessage | undefined;
   if (!row) return null;
-  return {
-    ...row,
-    attachment: row.attachment ? JSON.parse(row.attachment) as Attachment : undefined,
-  };
+  return parseDbMessage(row);
 }
 
 export function addMessage(message: Message): Message {
-  const stmt = db().prepare('INSERT INTO messages (id, conversationId, role, content, attachment, createdAt) VALUES (?, ?, ?, ?, ?, ?)');
+  const stmt = db().prepare('INSERT INTO messages (id, conversationId, role, type, content, name, attachment, createdAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?)');
   stmt.run(
     message.id,
     message.conversationId,
     message.role,
+    message.type,
     message.content,
+    message.name ?? null,
     message.attachment ? JSON.stringify(message.attachment) : null,
     message.createdAt
   );
@@ -127,10 +137,7 @@ export function updateMessage(id: string, content: string): Message | null {
   if (result.changes === 0) return null;
   const row = db().prepare('SELECT * FROM messages WHERE id = ?').get(id) as DbMessage | undefined;
   if (!row) return null;
-  return {
-    ...row,
-    attachment: row.attachment ? JSON.parse(row.attachment) as Attachment : undefined,
-  };
+  return parseDbMessage(row);
 }
 
 export interface AppState {

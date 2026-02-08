@@ -1,7 +1,7 @@
 import { createSignal, onMount, Show, For, createEffect } from 'solid-js';
 import { usePushNotifications } from '../hooks/usePushNotifications';
 
-type Tab = 'notifications' | 'prompts' | 'agent' | 'account';
+type Tab = 'notifications' | 'prompts' | 'agent' | 'cron' | 'account';
 
 interface SettingsModalProps {
   onClose: () => void;
@@ -10,11 +10,12 @@ interface SettingsModalProps {
 }
 
 export default function SettingsModal(props: SettingsModalProps) {
-  const [activeTab, setActiveTab] = createSignal<Tab>(props.initialTab || 'notifications');
+  const [activeTab, setActiveTab] = createSignal<Tab>(props.initialTab || (localStorage.getItem('settings-tab') as Tab) || 'notifications');
+  createEffect(() => localStorage.setItem('settings-tab', activeTab()));
   const { state, subscribe, unsubscribe } = usePushNotifications();
 
   // Prompts state
-  const [prompts, setPrompts] = createSignal<{ name: string }[]>([]);
+  const [prompts, setPrompts] = createSignal<{ name: string; description?: string }[]>([]);
   const [selectedPrompt, setSelectedPrompt] = createSignal<string>('');
   const [promptContent, setPromptContent] = createSignal('');
   const [promptOriginal, setPromptOriginal] = createSignal('');
@@ -92,6 +93,9 @@ export default function SettingsModal(props: SettingsModalProps) {
   const [agentError, setAgentError] = createSignal<string | null>(null);
   const [agentLoading, setAgentLoading] = createSignal(false);
 
+  // Cron state
+  const [crons, setCrons] = createSignal<any[]>([]);
+
   const fetchAgentInfo = async () => {
     setAgentLoading(true);
     setAgentError(null);
@@ -114,8 +118,29 @@ export default function SettingsModal(props: SettingsModalProps) {
     }
   };
 
+  const toggleCron = async (name: string, enabled: boolean) => {
+    try {
+      const res = await fetch(`/api/agent/cron/${encodeURIComponent(name)}/enabled`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ enabled }),
+      });
+      if (res.ok) {
+        setCrons(prev => prev.map(c => c.name === name ? { ...c, enabled } : c));
+      }
+    } catch {}
+  };
+
+  const fetchCrons = async () => {
+    try {
+      const res = await fetch('/api/agent/cron');
+      if (res.ok) setCrons(await res.json());
+    } catch {}
+  };
+
   createEffect(() => {
     if (activeTab() === 'agent') fetchAgentInfo();
+    if (activeTab() === 'cron') fetchCrons();
   });
 
   const ucFirst = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
@@ -205,6 +230,12 @@ export default function SettingsModal(props: SettingsModalProps) {
             Agent
           </button>
           <button
+            class={`settings-tab ${activeTab() === 'cron' ? 'settings-tab--active' : ''}`}
+            onClick={() => setActiveTab('cron')}
+          >
+            Schedule
+          </button>
+          <button
             class={`settings-tab ${activeTab() === 'account' ? 'settings-tab--active' : ''}`}
             onClick={() => setActiveTab('account')}
           >
@@ -248,6 +279,9 @@ export default function SettingsModal(props: SettingsModalProps) {
                   {promptSaving() ? 'Saving...' : 'Save'}
                 </button>
               </div>
+              <Show when={prompts().find(p => p.name === selectedPrompt())?.description}>
+                <p class="settings-row-desc">{prompts().find(p => p.name === selectedPrompt())!.description}</p>
+              </Show>
               <Show when={promptError()}>
                 <div class="settings-prompts-error">{promptError()}</div>
               </Show>
@@ -287,12 +321,6 @@ export default function SettingsModal(props: SettingsModalProps) {
                 <div class="settings-agent-group">
                   <h4 class="settings-agent-group-title">State</h4>
                   <div class="settings-agent-grid">
-                    <div class="settings-agent-item">
-                      <span class="settings-agent-label">Status</span>
-                      <span class={`settings-agent-badge settings-agent-badge--${(agentState() as any).state}`}>
-                        {(agentState() as any).state}
-                      </span>
-                    </div>
                     <Show when={(agentState() as any).currentEvent}>
                       <div class="settings-agent-item">
                         <span class="settings-agent-label">Current Event</span>
@@ -364,7 +392,7 @@ export default function SettingsModal(props: SettingsModalProps) {
                           <div class="settings-context-legend-item">
                             <span class="settings-context-dot settings-context-dot--compacted" />
                             <span class="settings-context-legend-label">Compacted</span>
-                            <span class="settings-context-legend-value">{fmtTokens(ctx.compacted.tokens)} tokens</span>
+                            <span class="settings-context-legend-value">{fmtTokens(ctx.compacted.tokens)} tokens{ctx.compacted.originalTokens ? ` (from ${fmtTokens(ctx.compacted.originalTokens)})` : ''}</span>
                           </div>
                           <div class="settings-context-legend-item">
                             <span class="settings-context-dot settings-context-dot--memory" />
@@ -416,6 +444,30 @@ export default function SettingsModal(props: SettingsModalProps) {
             </div>
           </Show>
 
+          <Show when={activeTab() === 'cron'}>
+            <div class="settings-section">
+              <For each={crons()}>
+                {(cron) => (
+                  <div class="settings-row">
+                    <div class="settings-row-label">
+                      <span class="settings-row-title">{cron.name}</span>
+                      <span>{cron.prompt}</span>
+                      <span class="settings-row-desc">{cron.cronHuman}</span>
+                      <span class="settings-row-desc">Last run: {cron.last_run ? fmtTimestamp(cron.last_run) : 'Never'}</span>
+                    </div>
+                    <button
+                      class={`settings-toggle ${cron.enabled ? 'settings-toggle--on' : ''}`}
+                      onClick={() => toggleCron(cron.name, !cron.enabled)}
+                    />
+                  </div>
+                )}
+              </For>
+              <Show when={crons().length === 0}>
+                <span class="settings-row-desc">No crons configured</span>
+              </Show>
+            </div>
+          </Show>
+
           <Show when={activeTab() === 'account'}>
             <div class="settings-section">
               <p class="settings-hint">If you log out, you'll need to generate a new invite on the server to log back in.</p>
@@ -456,20 +508,11 @@ export function useShouldPromptNotifications() {
       // Ignore errors
     }
 
-    // Check if user has dismissed the prompt before (localStorage)
-    const dismissed = localStorage.getItem('push-prompt-dismissed');
-    if (dismissed) {
-      return;
-    }
-
     // Should prompt
     setShouldPrompt(true);
   });
 
-  const dismiss = () => {
-    localStorage.setItem('push-prompt-dismissed', 'true');
-    setShouldPrompt(false);
-  };
+  const dismiss = () => setShouldPrompt(false);
 
   return { shouldPrompt, dismiss };
 }

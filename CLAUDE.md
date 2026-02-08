@@ -8,6 +8,7 @@
   Review uncommitted code for sane architecture, code practices, clean code
 - **Use Chrome DevTools MCP** for browser testing and debugging
 - **Read docs/widgets.md** before creating or editing widgets
+- **CSS: use cascading and inheritance** - Define base styles on containers, override with minimal classes. No per-element classes or inline styles. Read `Main.css` before adding new rules.
 
 ## Local Development
 
@@ -30,7 +31,7 @@ The Agent API is only accessible from inside the container. Use the helper scrip
 cat /tmp/content.txt | ./scripts/update-message.sh <message-id>
 ```
 
-See `docs/agent-api.md` for full API documentation.
+API docs are in source comments: `make api-docs` to print.
 
 ## Project Structure
 

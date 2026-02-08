@@ -11,7 +11,7 @@ docker compose up
 ```
 
 - Client: http://localhost:3102
-- Agent API: http://127.0.0.1:3100 (localhost only, see [agent-api.md](agent-api.md))
+- Agent API: http://127.0.0.1:3100 (localhost only, `make api-docs`)
 - Public API: http://localhost:3101
 
 ## Hot Reload

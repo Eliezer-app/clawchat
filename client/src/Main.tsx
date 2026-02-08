@@ -165,6 +165,39 @@ export default function Main() {
     await fetch(`/api/messages/${id}`, { method: 'DELETE' });
   };
 
+  const deleteMessages = async (ids: string[]) => {
+    if (!confirm('Delete internal work?')) return;
+    await Promise.all(ids.map(id => fetch(`/api/messages/${id}`, { method: 'DELETE' })));
+  };
+
+  const isInternal = (m: Message) => m.role === 'agent' && m.type && m.type !== 'message';
+
+  const formatToolCall = (content: string): { tool: string; args: string } => {
+    try {
+      const parsed = JSON.parse(content);
+      const tool = parsed.tool || '?';
+      const input = parsed.input;
+      if (!input || typeof input !== 'object') return { tool, args: '' };
+      const keys = Object.keys(input);
+      if (keys.length === 1) return { tool, args: String(input[keys[0]]) };
+      return { tool, args: keys.map(k => `${k}=${input[k]}`).join(', ') };
+    } catch { return { tool: '?', args: content }; }
+  };
+
+  const formatToolResult = (content: string): { tool: string; result: string; isError: boolean } => {
+    try {
+      const parsed = JSON.parse(content);
+      return { tool: parsed.tool || '?', result: parsed.result ?? '', isError: !!parsed.isError };
+    } catch { return { tool: '?', result: content, isError: false }; }
+  };
+
+  const getGroup = (idx: number): Message[] => {
+    const msgs = messages();
+    const group: Message[] = [];
+    for (let i = idx; i < msgs.length && isInternal(msgs[i]); i++) group.push(msgs[i]);
+    return group;
+  };
+
   const logout = async () => {
     await fetch('/api/auth/logout', { method: 'POST' });
     setAuthState('unauthenticated');
@@ -230,12 +263,9 @@ export default function Main() {
 
             <Show when={showSettings() || shouldPromptNotifications()}>
               <SettingsModal
-                onClose={() => {
-                  setShowSettings(false);
-                  dismissNotificationPrompt();
-                }}
+                onClose={() => { setShowSettings(false); dismissNotificationPrompt(); }}
                 onLogout={logout}
-                initialTab="notifications"
+                initialTab={!showSettings() && shouldPromptNotifications() ? 'notifications' : undefined}
               />
             </Show>
 
@@ -244,14 +274,50 @@ export default function Main() {
                 <div class="empty">No messages yet</div>
               ) : (
                 <For each={messages()}>
-                  {(msg) => (
-                    <MessageBubble
-                      message={msg}
-                      onDelete={deleteMsg}
-                      onImageClick={openLightbox}
-                      renderContent={renderContent}
-                    />
-                  )}
+                  {(msg, idx) => {
+                    if (isInternal(msg)) {
+                      // Only the first message in a group renders the block
+                      const prev = idx() > 0 ? messages()[idx() - 1] : undefined;
+                      if (prev && isInternal(prev)) return null;
+                      const group = () => getGroup(idx());
+                      return (
+                        <details class="annotation">
+                          <summary>
+                            Internal work ({group().length})
+                            <button class="annotation-delete" onClick={() => deleteMessages(group().map(m => m.id))}>×</button>
+                          </summary>
+                          <For each={group()}>
+                            {(m) => (
+                              <div class="annotation-item">
+                                <Show when={m.type === 'thought'}><em>{m.content}</em></Show>
+                                <Show when={m.type === 'tool_call'}>
+                                  {(() => { const tc = formatToolCall(m.content); return (
+                                    <>
+                                      <span class="tool-tag">{tc.tool}</span>
+                                      <Show when={tc.args}><pre>{tc.args}</pre></Show>
+                                    </>
+                                  ); })()}
+                                </Show>
+                                <Show when={m.type === 'tool_result'}>
+                                  {(() => { const tr = formatToolResult(m.content); return (
+                                    <pre classList={{ 'tool-error': tr.isError }}>{tr.result}</pre>
+                                  ); })()}
+                                </Show>
+                              </div>
+                            )}
+                          </For>
+                        </details>
+                      );
+                    }
+                    return (
+                      <MessageBubble
+                        message={msg}
+                        onDelete={deleteMsg}
+                        onImageClick={openLightbox}
+                        renderContent={renderContent}
+                      />
+                    );
+                  }}
                 </For>
               )}
               <Show when={agentTyping()}>
