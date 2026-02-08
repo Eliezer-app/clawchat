@@ -137,6 +137,28 @@ function createWidgetFramework(mode: 'embedded' | 'fullscreen'): string {
       });
     };
 
+    widget.log = function() {
+      var wp = document.body.dataset.widgetPath;
+      if (!wp) return;
+      var line = null;
+      try {
+        var stack = new Error().stack || '';
+        var match = stack.match(/about:srcdoc:(\\d+)/);
+        if (match) line = Number(match[1]);
+      } catch (e) {}
+      var parts = [];
+      for (var i = 0; i < arguments.length; i++) {
+        var arg = arguments[i];
+        parts.push(typeof arg === 'string' ? arg : JSON.stringify(arg));
+      }
+      parent.postMessage({
+        type: '${WidgetMessageType.LOG}',
+        widgetPath: wp,
+        line: line,
+        data: parts.join(' ')
+      }, '*');
+    };
+
     function init() {
       document.body.classList.add('widget-' + LAYOUT_MODE);
       setupResizeObserver();
@@ -168,17 +190,24 @@ function createWidgetFramework(mode: 'embedded' | 'fullscreen'): string {
 }
 
 // Inject CSS and JS into HTML document
-function injectIntoHtml(html: string, css: string, js: string): string {
+function injectIntoHtml(html: string, css: string, js: string, widgetPath: string | null): string {
   const hasHtmlTag = /<html[\s>]/i.test(html);
   const hasHeadTag = /<head[\s>]/i.test(html);
+  const bodyAttr = widgetPath ? ` data-widget-path="${widgetPath}"` : '';
 
   const injection = `<style>${css}</style><script>${js}</script>`;
 
   if (hasHtmlTag) {
+    let result = html;
     if (hasHeadTag) {
-      return html.replace(/<head([^>]*)>/i, `<head$1>${injection}`);
+      result = result.replace(/<head([^>]*)>/i, `<head$1>${injection}`);
+    } else {
+      result = result.replace(/<html([^>]*)>/i, `<html$1><head>${injection}</head>`);
     }
-    return html.replace(/<html([^>]*)>/i, `<html$1><head>${injection}</head>`);
+    if (/<body[\s>]/i.test(result)) {
+      result = result.replace(/<body([^>]*)>/i, `<body$1${bodyAttr}>`);
+    }
+    return result;
   }
 
   return `<!DOCTYPE html>
@@ -188,15 +217,23 @@ function injectIntoHtml(html: string, css: string, js: string): string {
 <meta name="viewport" content="width=device-width, initial-scale=1">
 ${injection}
 </head>
-<body>
+<body${bodyAttr}>
 ${html}
 </body>
 </html>`;
+}
+
+// Extract and strip widget path metadata comment injected by expandWidgetFiles
+function extractWidgetPath(html: string): { path: string | null; html: string } {
+  const match = html.match(/<!--widget-path:([^>]+)-->/);
+  if (!match) return { path: null, html };
+  return { path: match[1], html: html.replace(match[0], '') };
 }
 
 // Wrap widget HTML for iframe embedding
 // mode: 'embedded' (default) = overflow hidden, 'fullscreen' = fill viewport
 export function wrapWidgetHtml(html: string, mode: 'embedded' | 'fullscreen' = 'embedded'): string {
   const css = mode === 'fullscreen' ? CSS_RESET_FULLSCREEN : CSS_RESET_IFRAME;
-  return injectIntoHtml(html, css, createWidgetFramework(mode));
+  const { path: widgetPath, html: cleanHtml } = extractWidgetPath(html);
+  return injectIntoHtml(cleanHtml, css, createWidgetFramework(mode), widgetPath);
 }

@@ -288,9 +288,6 @@ export default function Main() {
                         <details class="annotation">
                           <summary>
                             Internal work ({group().length})
-                            <Show when={isLast()}>
-                              <button class="annotation-stop" onClick={stopAgent}>Stop</button>
-                            </Show>
                             <button class="annotation-delete" onClick={() => deleteMessages(group().map(m => m.id))}>×</button>
                           </summary>
                           <For each={group()}>
@@ -313,6 +310,9 @@ export default function Main() {
                               </div>
                             )}
                           </For>
+                          <Show when={isLast()}>
+                            <button class="annotation-stop" onClick={stopAgent}>Stop</button>
+                          </Show>
                         </details>
                       );
                     }

@@ -80,9 +80,10 @@ function expandWidgetFiles(content: string): string {
       return '```widget\n<!-- Invalid widget path -->\n```';
     }
     const fullPath = path.join(appsDir, trimmedPath);
+    const widgetPath = trimmedPath.replace(/\.html$/, '');
     try {
       const html = fs.readFileSync(fullPath, 'utf-8');
-      return '```widget\n' + html + '\n```';
+      return '```widget\n<!--widget-path:' + widgetPath + '-->' + html + '\n```';
     } catch {
       return '```widget\n<!-- Widget file not found: ' + trimmedPath + ' -->\n```';
     }
@@ -678,7 +679,7 @@ publicApp.post('/api/upload', upload.single('file'), (req, res) => {
     conversationId: message.conversationId,
     messageId: message.id,
     content: message.content,
-    attachment,
+    attachment: attachment ? { ...attachment, path: path.join(chatPublicDir, attachment.filename) } : undefined,
   });
   res.json(message);
 });
@@ -943,6 +944,40 @@ publicApp.post('/api/widget-error/:conversationId', (req, res) => {
   console.error('[Widget Error]', conversationId, appId || 'unknown', error);
 
   res.json({ ok: true });
+});
+
+// Widget log endpoint - receives logs from widgets and writes to disk
+publicApp.post('/api/widget-log', (req, res) => {
+  const { widgetPath, line, data } = req.body;
+
+  if (!widgetPath || typeof widgetPath !== 'string') {
+    res.status(400).json({ ok: false, error: 'widgetPath required' });
+    return;
+  }
+
+  // Sanitize: no .. traversal, only alphanumeric/dash/underscore/slash
+  if (widgetPath.includes('..') || !/^[\w\-/]+$/.test(widgetPath)) {
+    res.status(400).json({ ok: false, error: 'Invalid widgetPath' });
+    return;
+  }
+
+  const now = new Date();
+  const day = now.toISOString().slice(0, 10); // YYYY-MM-DD
+  const time = now.toTimeString().slice(0, 8); // HH:MM:SS
+  const lineStr = line ? ` L${line}` : '';
+  const logLine = `${time}${lineStr} ${data}\n`;
+
+  const logDir = path.join(appsDir, widgetPath, 'logs');
+  const logFile = path.join(logDir, `${day}.log`);
+
+  try {
+    fs.mkdirSync(logDir, { recursive: true });
+    fs.appendFileSync(logFile, logLine);
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('[Widget Log] Write failed:', err);
+    res.status(500).json({ ok: false, error: 'Failed to write log' });
+  }
 });
 
 // SPA catch-all - serve index.html for client-side routing

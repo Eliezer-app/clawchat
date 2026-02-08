@@ -3,6 +3,14 @@ import { WidgetMessageType, WidgetApi } from '@clawchat/shared';
 import { wrapWidgetHtml } from '../widget';
 import { compensateScroll } from '../scrollAnchor';
 
+function sendLog(widgetPath: string, line: number | null, data: string) {
+  fetch(WidgetApi.widgetLog, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ widgetPath, line, data }),
+  }).catch(() => {});
+}
+
 const MIN_HEIGHT = 60;
 const MAX_HEIGHT = 5000;
 const DEFAULT_HEIGHT = 100;
@@ -138,7 +146,7 @@ export default function Widget(props: WidgetProps) {
       const data = e.data;
       if (!data || typeof data !== 'object') return;
 
-      const { type, appId, state, id, action, payload, height, error, stack } = data;
+      const { type, appId, state, id, action, payload, height, error, stack, widgetPath, line } = data;
 
       switch (type) {
         case WidgetMessageType.GET_STATE:
@@ -155,6 +163,9 @@ export default function Widget(props: WidgetProps) {
           break;
         case WidgetMessageType.ERROR:
           handleWidgetError(error, stack);
+          break;
+        case WidgetMessageType.LOG:
+          if (widgetPath) sendLog(widgetPath, line, data.data);
           break;
         default:
           if (type) {

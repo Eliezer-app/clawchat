@@ -7,6 +7,7 @@ export const WidgetMessageType = {
   RESIZE: 'resize',
   REQUEST: 'request',
   ERROR: 'widgetError',
+  LOG: 'widgetLog',
 
   // Parent → Widget
   STATE: 'state',
@@ -20,6 +21,7 @@ export const WidgetApi = {
   appState: (conversationId: string, appId: string) => `/api/app-state/${conversationId}/${appId}`,
   appAction: (conversationId: string, appId: string) => `/api/app-action/${conversationId}/${appId}`,
   widgetError: (conversationId: string) => `/api/widget-error/${conversationId}`,
+  widgetLog: '/api/widget-log',
   events: '/api/events',
 } as const;
 
