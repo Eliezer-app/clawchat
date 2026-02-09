@@ -1,7 +1,5 @@
 # Widgets v2: Static Pages with Server-Side Code
 
-> **Status: Draft** — design brainstorm, not finalized
-
 ## Problem
 
 Widgets are currently inlined — server reads HTML files, embeds them in chat messages, client renders in `srcdoc` iframes with injected JS framework. This prevents widgets from loading external assets (CSS, JS, images) and limits them to single-file apps.
@@ -50,34 +48,27 @@ Widgets call endpoints directly via `fetch()`. No JS framework injected, no `wid
 
 | Endpoint | Method | Description |
 |----------|--------|-------------|
-| `/api/app-state/:convId/:appId` | GET | Read app state |
-| `/api/app-state/:convId/:appId` | POST | Write app state |
-| `/api/app-action/:convId/:appId` | POST | Call server action `{ action, payload }` |
+| `/api/app-state/:appId` | GET | Read app state |
+| `/api/app-state/:appId` | POST | Write app state |
 | `/api/widget-log` | POST | Write to log file `{ widgetPath, data }` |
+| `/widget/:app/api/*` | * | App-specific server-side routes (from `index.mts`) |
 
 ### Server-side code
 
-Agent writes `apps/todos/index.mts` with exported action handlers:
+Agent writes `apps/todos/index.mts` exporting a default function that receives an Express Router:
 
 ```ts
-export const getItems = async ({ payload, appId }) => {
-  // read from file, database, external API, etc.
-  return items;
-};
-
-export const addItem = async ({ payload }) => {
-  // write to storage
-  return { ok: true };
+export default (router) => {
+  router.get('/items', (req, res) => { /* ... */ });
+  router.post('/items', (req, res) => { /* ... */ });
 };
 ```
 
-**Loading**: at server startup, scan `apps/*/index.mts`, transpile with esbuild, import, register as action handlers.
+Mounted at `/widget/todos/api/`. Widget calls `fetch('/widget/todos/api/items')`.
+
+**Loading**: at server startup, scan `apps/*/index.mts`, transpile with esbuild, import, mount router.
 
 **Hot-reload**: agent restarts the server after modifying code. Restart takes milliseconds. SSE reconnects automatically. No eval, no file watching, no memory leak risk.
-
-### ConversationId
-
-Widget needs conversationId for API calls. Parent includes it in iframe URL: `/widget/todos/index.html?c=default`.
 
 ## Changes
 
@@ -101,14 +92,19 @@ Widget needs conversationId for API calls. Parent includes it in iframe URL: `/w
 - `docs/widgets.md` — rewrite
 
 ### New
-- `server/src/widget-api.js` — reference/guide (optional include)
+- `apps/common/public/widget-api.js` — optional JS library (`getState`, `setState`, `log`)
 
-## Phase 2
+## Data: `apps/common/apps.db`
 
-Auto-extract inline widgets: agent writes `widget\n<html>` in message, server saves to `apps/_inline/<msg-id>/public/index.html`. All widgets are URL-based from client's perspective.
+Widget state is currently in `server/data/chat.db` (`app_state` table). Move it to a dedicated `apps/common/apps.db` so all widget data lives under `apps/`. This keeps the main db for chat concerns (messages, sessions) and widget data separate and portable.
 
-## Open Questions
+- Single shared db for all apps — not per-app
+- `widget-api.js` in `apps/common/public/`
+- `apps/common/` is tracked in git (except `*.db`)
 
-- Per-app SQLite database? Or is app-state (JSON blob) sufficient?
-- Existing widget migration: `apps/drummachine/sequencer.html` → `apps/drummachine/public/sequencer.html`
-- Should `widget-api.js` be in `apps/_lib/` or served from a special route?
+## TODO
+
+- [ ] Remove conversationId completely — partially removed from widget API routes (hardcoded to `'default'`), still in `shared/src/widget.ts` URL helper, db schema, and message system
+- [ ] Update agent prompt — teach agent how to create widgets (in agent project)
+- [ ] Server-side handlers — loading mechanism exists (`loadAppHandlers`), no apps use it yet
+- [ ] Move app_state table from main db into `apps/common/apps.db`
