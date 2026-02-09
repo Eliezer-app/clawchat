@@ -2,7 +2,7 @@
   "name": "clawchat",
   "private": true,
   "scripts": {
-    "invite": "pnpm --filter @clawchat/server agent-invite",
+    "invite": "pnpm --filter @clawchat/server invite",
     "generate-vapid": "npx web-push generate-vapid-keys"
   },
   "workspaces": ["server", "client", "shared"],

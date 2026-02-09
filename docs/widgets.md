@@ -1,105 +1,106 @@
 # Widgets
 
-Widgets are interactive HTML/JS components embedded in chat messages.
+Widgets are interactive HTML/JS components embedded in chat messages via iframes.
 
 ## Embedding Widgets
 
-### Inline Widget
-
-Embed HTML directly in a message:
-
-~~~markdown
-```widget
-<html>...</html>
-```
-~~~
-
 ### File-based Widget
 
-Reference an HTML file from the `apps/` directory:
+Create `apps/<name>/public/index.html`, then embed in a message:
 
-~~~markdown
-```widget:globe/widgets/explorer.html
 ```
-~~~
+<iframe src="/widget/<name>/"></iframe>
+```
 
-The server expands file references to inline HTML when serving messages. Path traversal (`..`) is blocked.
+The server serves static files from `apps/<name>/public/` at `/widget/<name>/`.
 
-## Framework
+### Inline Widget (data URL)
 
-A framework is auto-injected that handles resize detection, state management, and server requests.
+Embed HTML directly as a base64 data URL:
 
-## Framework API
+```
+<iframe src="data:text/html;base64,PCFET0NUWVB..."></iframe>
+```
 
-### widget.onState(callback)
-Register a callback to receive state updates.
+Inline widgets have no state (opaque origin — no API access). Use for simple, self-contained content.
+
+## API
+
+Widgets use standard REST calls. State is scoped by app ID.
+
+### Read State
 
 ```javascript
-widget.onState(state => {
-  tasks = state?.tasks || [];
-  render();
+const APP_ID = 'my-app';
+
+const res = await fetch(`/api/app-state/${APP_ID}`);
+const data = await res.json(); // { state: {...}, version: N }
+```
+
+### Write State
+
+```javascript
+await fetch(`/api/app-state/${APP_ID}`, {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({ state: { tasks } }),
 });
-widget.getState(APP_ID);
 ```
 
-### widget.getState(appId)
-Request current state from server. Call after registering onState callback.
+### Logging
 
 ```javascript
-widget.getState(APP_ID);
+fetch('/api/widget-log', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({ widgetPath: 'my-app', data: { msg: 'hello' } }),
+}).catch(() => {});
 ```
 
-### widget.setState(appId, state)
-Save state to the server.
-
-```javascript
-widget.setState(APP_ID, { tasks });
-```
-
-### widget.request(appId, action, payload)
-Make a server request. Returns a promise.
-
-```javascript
-const result = await widget.request(APP_ID, 'vote', { option: 'A' });
-```
-
-## Best Practice: Define App ID
-
-Define the app ID as a top-level constant for clarity and consistency:
-
-```javascript
-const APP_ID = 'my-todo-app';
-
-// Then use it in all state calls
-widget.getState(APP_ID);
-widget.setState(APP_ID, { tasks });
-widget.request(APP_ID, 'addTask', { text: 'New task' });
-```
-
-Widgets with the same app ID share state. This is intentional - multiple widgets can be views into the same app.
+Logs are written to `server/data/widget-logs/`.
 
 ## Auto Features
 
-- **Resize** - ResizeObserver auto-reports height changes
-- **CSS reset** - `box-sizing: border-box`, no margin/padding on body
-- **Sandbox** - Runs in `sandbox="allow-scripts"` iframe
-- **Live sync** - When one widget updates state, other widgets with the same appId automatically receive the new state via their `onState` callback
+- **Resize** — Parent-side ResizeObserver auto-sizes the iframe to fit content (file-based only)
+- **Injected CSS** — `html, body { height: auto; min-height: 0; overflow: hidden; }` prevents scrollbars and viewport unit issues
+- **Sandbox** — File-based: `allow-scripts allow-same-origin`. Data URL: `allow-scripts` only
+- **Lazy loading** — Widgets are created when within 500px of the viewport and destroyed when scrolled away
 
-## Message Protocol
+## Shared State
 
-| Direction | Type | Fields |
-|-----------|------|--------|
-| Widget → Parent | `getState` | `appId` |
-| Widget → Parent | `setState` | `appId`, `state` |
-| Widget → Parent | `resize` | `height` |
-| Widget → Parent | `request` | `id`, `appId`, `action`, `payload` |
-| Parent → Widget | `state` | `state` |
-| Parent → Widget | `response` | `id`, `data`, `error?` |
-| Parent → Widget | `stateUpdated` | `appId` (triggers auto re-fetch) |
+Widgets with the same `APP_ID` share state. Multiple widgets can be views into the same app data. When one widget updates state, the server broadcasts an SSE event so other widgets can re-fetch.
 
-## Example: Todo List
+## Example: Counter (data URL, no state)
 
-```widget
+```html
+<!DOCTYPE html>
+<html>
+<head>
+  <style>
+    body { font-family: system-ui; padding: 16px; display: flex; gap: 16px; align-items: center; color: white; }
+    button { padding: 8px 16px; font-size: 16px; }
+    span { font-size: 24px; min-width: 40px; text-align: center; }
+  </style>
+</head>
+<body>
+  <button onclick="count--; update()">-</button>
+  <span id="v">0</span>
+  <button onclick="count++; update()">+</button>
+  <script>
+    let count = 0;
+    const update = () => document.getElementById('v').textContent = count;
+  </script>
+</body>
+</html>
+```
+
+Base64-encode and embed as `<iframe src="data:text/html;base64,...">`.
+
+## Example: File-based Widget with State
+
+`apps/todo/public/index.html`:
+
+```html
 <!DOCTYPE html>
 <html>
 <head>
@@ -119,6 +120,25 @@ Widgets with the same app ID share state. This is intentional - multiple widgets
     const APP_ID = 'todo';
     let tasks = [];
 
+    async function loadState() {
+      try {
+        const res = await fetch(`/api/app-state/${APP_ID}`);
+        if (res.ok) {
+          const data = await res.json();
+          tasks = data.state?.tasks || [];
+          render();
+        }
+      } catch {}
+    }
+
+    function saveState() {
+      fetch(`/api/app-state/${APP_ID}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ state: { tasks } }),
+      }).catch(() => {});
+    }
+
     function render() {
       document.getElementById('list').innerHTML =
         tasks.map(t => `<li>${t}</li>`).join('');
@@ -130,105 +150,29 @@ Widgets with the same app ID share state. This is intentional - multiple widgets
         tasks.push(inp.value.trim());
         inp.value = '';
         render();
-        widget.setState(APP_ID, { tasks });
+        saveState();
       }
     }
 
-    widget.onState(state => {
-      tasks = state?.tasks || [];
-      render();
-    });
-    widget.getState(APP_ID);
+    loadState();
   </script>
 </body>
 </html>
 ```
 
-## Example: Stateless Counter
+Embed: `<iframe src="/widget/todo/"></iframe>`
 
-Widgets without state work fine - just don't use state methods:
+## Fullscreen
 
-```widget
-<!DOCTYPE html>
-<html>
-<head>
-  <style>
-    body { font-family: system-ui; padding: 16px; display: flex; gap: 16px; align-items: center; }
-    button { padding: 8px 16px; font-size: 16px; }
-    span { font-size: 24px; min-width: 40px; text-align: center; }
-  </style>
-</head>
-<body>
-  <button onclick="count--; update()">-</button>
-  <span id="v">0</span>
-  <button onclick="count++; update()">+</button>
-  <script>
-    let count = 0;
-    const update = () => document.getElementById('v').textContent = count;
-  </script>
-</body>
-</html>
+The ⧉ button on widget messages opens the widget in a new browser tab.
+
+## File Structure
+
 ```
-
-## Lifecycle
-
-- **Created** when approaching viewport (200px before visible)
-- **Stays loaded** once created (not unloaded on scroll)
-- Scroll stays at bottom as widgets resize during page load
-
-## Server-Side Actions
-
-Register custom action handlers in `server/src/index.ts`:
-
-```typescript
-import { registerAppAction } from './index.js';
-
-registerAppAction('getWeather', ({ conversationId, appId, payload }) => {
-  const { city } = payload as { city?: string };
-  if (!city) {
-    return { error: 'City required' };
-  }
-  // Return data (will be wrapped in { ok: true, result: ... })
-  return { city, temp: 22, description: 'Sunny' };
-});
-```
-
-Call from widget:
-
-```javascript
-const weather = await widget.request('my-app', 'getWeather', { city: 'London' });
-console.log(weather.temp); // 22
-```
-
-### Handler Context
-
-| Field | Description |
-|-------|-------------|
-| `conversationId` | Current conversation |
-| `appId` | App ID from request |
-| `payload` | Request payload object |
-
-### Return Values
-
-- Return an object → success response with `{ ok: true, result: <your object> }`
-- Return `{ error: 'message' }` → error response
-- Throw an error → error response with error message
-
-## Fullscreen Mode
-
-Click the ⧉ button on a widget to open it in a new tab at `/message/:id/widget`. The widget fills the viewport and the framework sets:
-
-- `document.body.classList.add('widget-fullscreen')`
-- CSS variable `--widget-layout: fullscreen`
-
-Use these to adapt layout:
-
-```css
-body { height: 450px; }
-body.widget-fullscreen { height: 100%; }
-```
-
-```javascript
-const isFullscreen = getComputedStyle(document.documentElement)
-  .getPropertyValue('--widget-layout').trim() === 'fullscreen';
+apps/
+  mywidget/
+    public/
+      index.html    # Entry point, served at /widget/mywidget/
+      style.css     # Optional additional files
+      ...
 ```

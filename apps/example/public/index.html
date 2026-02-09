@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <style>
+    body { font-family: system-ui; padding: 20px; background: #1a1a2e; color: #e0e0e0; }
+    h1 { color: #667eea; margin: 0 0 8px; font-size: 18px; }
+    p { margin: 0; color: #999; }
+    button { margin-top: 12px; padding: 8px 16px; background: #667eea; color: white; border: none; border-radius: 6px; cursor: pointer; }
+    button:hover { background: #5a6fd6; }
+    .counter { font-size: 24px; font-weight: bold; margin: 8px 0; }
+  </style>
+</head>
+<body>
+  <h1>Example Widget</h1>
+  <p>Static page with persisted state</p>
+  <div class="counter" id="count">...</div>
+  <button onclick="increment()">Count</button>
+  <script>
+    const appId = 'example';
+    let n = 0;
+
+    async function loadState() {
+      try {
+        const res = await fetch(`/api/app-state/${appId}`);
+        if (res.ok) {
+          const data = await res.json();
+          n = data.state?.count || 0;
+        }
+      } catch {}
+      document.getElementById('count').textContent = n;
+    }
+
+    async function saveState() {
+      fetch(`/api/app-state/${appId}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ state: { count: n } }),
+      }).catch(() => {});
+    }
+
+    function increment() {
+      n++;
+      document.getElementById('count').textContent = n;
+      saveState();
+    }
+
+    loadState();
+  </script>
+</body>
+</html>

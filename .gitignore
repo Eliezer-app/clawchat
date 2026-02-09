@@ -6,3 +6,7 @@ data/
 .env
 .env.*
 .pnpm-store/
+.DS_Store
+apps/*
+!apps/common/
+!apps/example/

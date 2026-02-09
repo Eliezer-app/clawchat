@@ -7,7 +7,7 @@
     "build": "tsc",
     "start": "node dist/index.js",
     "agent-send": "tsx src/cli.ts",
-    "agent-invite": "tsx src/invite.ts"
+    "invite": "tsx src/invite.ts"
   },
   "dependencies": {
     "@clawchat/shared": "workspace:*",

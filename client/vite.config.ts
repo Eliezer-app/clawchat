@@ -8,7 +8,8 @@ export default defineConfig({
     proxy: {
       '/api': process.env.API_URL || 'http://127.0.0.1:3101',
       '/invite': process.env.API_URL || 'http://127.0.0.1:3101',
-      '/chat-public': process.env.API_URL || 'http://127.0.0.1:3101'
+      '/chat-public': process.env.API_URL || 'http://127.0.0.1:3101',
+      '/widget': process.env.API_URL || 'http://127.0.0.1:3101'
     }
   }
 });

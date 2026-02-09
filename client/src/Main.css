@@ -625,7 +625,7 @@ body {
   flex: 1;
   overflow-y: auto;
   overflow-x: hidden;
-  overflow-anchor: none;
+  overflow-anchor: auto;
   padding: 16px;
   display: flex;
   flex-direction: column;

@@ -1,4 +1,4 @@
-.PHONY: dev build typecheck lint clean install push-setup push-rotate-keys connect-mock-agent connect-dev-agent api-docs
+.PHONY: dev build typecheck lint clean install push-setup push-rotate-keys connect-mock-agent connect-dev-agent api-docs invite
 
 # Development
 dev: connect-mock-agent
@@ -85,6 +85,10 @@ push-rotate-keys:
 	echo "VAPID keys rotated in .env"; \
 	echo "Restarting server..."; \
 	docker compose restart server
+
+# Create invite token
+invite:
+	docker compose exec server pnpm run invite
 
 # Print Agent API docs (extracted from source comments)
 api-docs:

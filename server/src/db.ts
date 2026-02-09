@@ -141,16 +141,14 @@ export function updateMessage(id: string, content: string): Message | null {
 }
 
 export interface AppState {
-  conversationId: string;
   appId: string;
   state: unknown;
   version: number;
   updatedAt: string;
 }
 
-export function getAppState(conversationId: string, appId: string): AppState | null {
-  const row = db().prepare('SELECT * FROM app_state WHERE conversationId = ? AND appId = ?').get(conversationId, appId) as {
-    conversationId: string;
+export function getAppState(appId: string): AppState | null {
+  const row = db().prepare('SELECT * FROM app_state WHERE conversationId = ? AND appId = ?').get('default', appId) as {
     appId: string;
     state: string;
     version: number;
@@ -158,12 +156,14 @@ export function getAppState(conversationId: string, appId: string): AppState | n
   } | undefined;
   if (!row) return null;
   return {
-    ...row,
+    appId: row.appId,
     state: JSON.parse(row.state),
+    version: row.version,
+    updatedAt: row.updatedAt,
   };
 }
 
-export function setAppState(conversationId: string, appId: string, state: unknown, version: number = 1): AppState {
+export function setAppState(appId: string, state: unknown, version: number = 1): AppState {
   const updatedAt = new Date().toISOString();
   const stmt = db().prepare(`
     INSERT INTO app_state (conversationId, appId, state, version, updatedAt)
@@ -173,8 +173,8 @@ export function setAppState(conversationId: string, appId: string, state: unknow
       version = excluded.version,
       updatedAt = excluded.updatedAt
   `);
-  stmt.run(conversationId, appId, JSON.stringify(state), version, updatedAt);
-  return { conversationId, appId, state, version, updatedAt };
+  stmt.run('default', appId, JSON.stringify(state), version, updatedAt);
+  return { appId, state, version, updatedAt };
 }
 
 // ===================

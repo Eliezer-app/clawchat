@@ -8,7 +8,7 @@ import fs from 'fs';
 import cookieParser from 'cookie-parser';
 import { getMessages, getMessage, addMessage, deleteMessage, updateMessage, getAppState, setAppState, getSessionByToken, createSession, deleteSession, getInvite, markInviteUsed, createPushSubscription, deletePushSubscription, setSessionVisibility, updateSessionActivity } from './db.js';
 import { initPush, getVapidPublicKey, sendPushToAll, isPushEnabled } from './push.js';
-import type { Message, Attachment, WidgetError } from '@clawchat/shared';
+import type { Message, Attachment } from '@clawchat/shared';
 import { SSEEventType } from '@clawchat/shared';
 
 function requireEnv(name: string): string {
@@ -71,35 +71,6 @@ function notifyAgent(type: string, payload: unknown): void {
 // Ensure data directories exist
 if (chatPublicDir) fs.mkdirSync(chatPublicDir, { recursive: true });
 
-// Expand widget file references in message content
-// Transforms ```widget:path/to/file.html``` to ```widget\n<file contents>```
-function expandWidgetFiles(content: string): string {
-  return content.replace(/```widget:([^\n`]+)\n?```/g, (_, filePath) => {
-    const trimmedPath = filePath.trim();
-    if (trimmedPath.includes('..') || !trimmedPath.endsWith('.html')) {
-      return '```widget\n<!-- Invalid widget path -->\n```';
-    }
-    const fullPath = path.join(appsDir, trimmedPath);
-    const widgetPath = trimmedPath.replace(/\.html$/, '');
-    try {
-      const html = fs.readFileSync(fullPath, 'utf-8');
-      return '```widget\n<!--widget-path:' + widgetPath + '-->' + html + '\n```';
-    } catch {
-      return '```widget\n<!-- Widget file not found: ' + trimmedPath + ' -->\n```';
-    }
-  });
-}
-
-function expandMessage(msg: Message): Message {
-  return { ...msg, content: expandWidgetFiles(msg.content) };
-}
-
-// Count widgets in message content (max 1 allowed)
-function countWidgets(content: string): number {
-  const widgetRegex = /```widget(:[^\n`]+)?\n/g;
-  return (content.match(widgetRegex) || []).length;
-}
-
 // Configure multer for file uploads — saves to chat-public with original filenames
 function resolveFilename(dir: string, original: string): string {
   const ext = path.extname(original);
@@ -150,7 +121,7 @@ function createMessage(role: Message['role'], content: string, opts?: { conversa
     attachment: opts?.attachment,
     createdAt: new Date().toISOString(),
   });
-  broadcast({ type: 'message', message: expandMessage(message) });
+  broadcast({ type: 'message', message });
 
   // Send push notification for regular agent messages only
   if (role === 'agent' && (opts?.type || 'message') === 'message' && isPushEnabled()) {
@@ -184,10 +155,6 @@ agentApp.post('/send', (req, res) => {
   const { conversationId, content, type, name } = req.body;
   if (!content || typeof content !== 'string' || !content.trim()) {
     res.status(400).json({ error: 'Content required' });
-    return;
-  }
-  if (countWidgets(content) > 1) {
-    res.status(400).json({ error: 'Only one widget per message allowed' });
     return;
   }
   // Auto-clear typing indicator when agent sends a final message
@@ -278,7 +245,7 @@ agentApp.patch('/messages/:id', (req, res) => {
     res.status(404).json({ error: 'Message not found' });
     return;
   }
-  broadcast({ type: 'update', message: expandMessage(message) });
+  broadcast({ type: 'update', message });
   res.json(message);
 });
 
@@ -586,30 +553,21 @@ publicApp.use(authMiddleware);
 // Serve shared files (uploads + agent-provided assets)
 if (chatPublicDir) publicApp.use('/chat-public', express.static(chatPublicDir));
 
+// Widget static file serving: /widget/<app>/* → apps/<app>/public/*
+const widgetStatic = express.static(appsDir, { fallthrough: true });
+publicApp.use('/widget/:app', (req: Request, res: Response, next: NextFunction) => {
+  const { app } = req.params;
+  if (!/^[\w-]+$/.test(app)) return next();
+  const saved = req.url;
+  req.url = `/${app}/public${saved}`;
+  widgetStatic(req, res, () => {
+    req.url = saved;
+    next();
+  });
+});
+
 // Serve frontend static files (protected by auth middleware above)
 publicApp.use(express.static(clientDist));
-
-// Standalone widget endpoint - serves widget page by message ID
-publicApp.get('/api/widget/:messageId', (req, res) => {
-  const { messageId } = req.params;
-
-  const message = getMessage(messageId);
-  if (!message) {
-    res.status(404).json({ error: 'Message not found' });
-    return;
-  }
-
-  // Expand widget files
-  const expanded = expandMessage(message);
-
-  // Verify message has exactly one widget
-  if (countWidgets(expanded.content) !== 1) {
-    res.status(400).json({ error: 'Message does not contain exactly one widget' });
-    return;
-  }
-
-  res.json(expanded);
-});
 
 publicApp.get('/api/events', (req, res) => {
   res.setHeader('Content-Type', 'text/event-stream');
@@ -633,17 +591,13 @@ publicApp.get('/api/events', (req, res) => {
 });
 
 publicApp.get('/api/messages', (req, res) => {
-  res.json(getMessages().map(expandMessage));
+  res.json(getMessages());
 });
 
 publicApp.post('/api/messages', (req, res) => {
   const { content } = req.body;
   if (!content || typeof content !== 'string' || !content.trim()) {
     res.status(400).json({ error: 'Content required' });
-    return;
-  }
-  if (countWidgets(content) > 1) {
-    res.status(400).json({ error: 'Only one widget per message allowed' });
     return;
   }
   const message = createMessage('user', content.trim());
@@ -793,9 +747,9 @@ publicApp.put('/api/prompts/:name', (req, res) => {
 });
 
 // App state endpoints (widgets are views into app state)
-publicApp.get('/api/app-state/:conversationId/:appId', (req, res) => {
-  const { conversationId, appId } = req.params;
-  const state = getAppState(conversationId, appId);
+publicApp.get('/api/app-state/:appId', (req, res) => {
+  const { appId } = req.params;
+  const state = getAppState(appId);
   if (!state) {
     res.status(404).json({ error: 'Not found' });
     return;
@@ -803,8 +757,8 @@ publicApp.get('/api/app-state/:conversationId/:appId', (req, res) => {
   res.json(state);
 });
 
-publicApp.post('/api/app-state/:conversationId/:appId', (req, res) => {
-  const { conversationId, appId } = req.params;
+publicApp.post('/api/app-state/:appId', (req, res) => {
+  const { appId } = req.params;
   const { state, version } = req.body;
 
   // Validate state is present and not too large (1MB limit)
@@ -818,133 +772,14 @@ publicApp.post('/api/app-state/:conversationId/:appId', (req, res) => {
     return;
   }
 
-  const result = setAppState(conversationId, appId, state, version || 1);
+  const result = setAppState(appId, state, version || 1);
 
   // Broadcast to other widgets viewing this app
-  broadcast({ type: SSEEventType.APP_STATE_UPDATED, conversationId, appId });
+  broadcast({ type: SSEEventType.APP_STATE_UPDATED, appId });
 
   res.json(result);
 });
 
-// App action endpoint - extensible by agent
-interface AppActionContext {
-  conversationId: string;
-  appId: string;
-  payload: unknown;
-}
-type AppActionHandler = (ctx: AppActionContext) => Promise<unknown> | unknown;
-const appActionHandlers: Map<string, AppActionHandler> = new Map();
-
-export function registerAppAction(action: string, handler: AppActionHandler) {
-  appActionHandlers.set(action, handler);
-}
-
-// Mock weather data for widget APIs (keyed by lowercase city name)
-const mockWeatherData: Record<string, { temp: number; humidity: number; description: string; icon: string }> = {
-  // Globe widget capitals
-  'washington d.c.': { temp: 14, humidity: 60, description: 'Partly cloudy', icon: '⛅' },
-  'london': { temp: 9, humidity: 80, description: 'Rainy', icon: '🌧️' },
-  'paris': { temp: 11, humidity: 70, description: 'Overcast', icon: '☁️' },
-  'berlin': { temp: 7, humidity: 65, description: 'Cloudy', icon: '☁️' },
-  'tokyo': { temp: 18, humidity: 65, description: 'Partly cloudy', icon: '⛅' },
-  'canberra': { temp: 22, humidity: 45, description: 'Sunny', icon: '☀️' },
-  'brasilia': { temp: 26, humidity: 70, description: 'Warm', icon: '🌤️' },
-  'new delhi': { temp: 30, humidity: 55, description: 'Hot', icon: '🔥' },
-  'beijing': { temp: 8, humidity: 50, description: 'Hazy', icon: '🌫️' },
-  'moscow': { temp: -5, humidity: 75, description: 'Snow', icon: '❄️' },
-  'ottawa': { temp: -2, humidity: 70, description: 'Cold', icon: '❄️' },
-  'mexico city': { temp: 20, humidity: 50, description: 'Pleasant', icon: '🌤️' },
-  'rome': { temp: 16, humidity: 60, description: 'Mild', icon: '🌤️' },
-  'madrid': { temp: 18, humidity: 40, description: 'Clear', icon: '☀️' },
-  'cairo': { temp: 25, humidity: 35, description: 'Dry', icon: '☀️' },
-  'pretoria': { temp: 24, humidity: 50, description: 'Warm', icon: '🌤️' },
-  'buenos aires': { temp: 22, humidity: 65, description: 'Mild', icon: '🌤️' },
-  'seoul': { temp: 10, humidity: 55, description: 'Cool', icon: '🌤️' },
-  'ankara': { temp: 12, humidity: 45, description: 'Dry', icon: '☀️' },
-  'stockholm': { temp: 3, humidity: 75, description: 'Cold', icon: '❄️' },
-};
-
-registerAppAction('getWeather', ({ payload }) => {
-  const { city } = payload as { city?: string };
-  if (!city) {
-    return { error: 'City required' };
-  }
-  const key = city.toLowerCase().trim();
-  const data = mockWeatherData[key];
-  if (data) {
-    return { city, ...data };
-  }
-  // Return random weather for unknown cities
-  const temps = [5, 10, 15, 20, 25, 30];
-  const conditions = [
-    { description: 'Clear', icon: '☀️' },
-    { description: 'Cloudy', icon: '☁️' },
-    { description: 'Rainy', icon: '🌧️' },
-    { description: 'Windy', icon: '💨' },
-  ];
-  const temp = temps[Math.floor(Math.random() * temps.length)];
-  const condition = conditions[Math.floor(Math.random() * conditions.length)];
-  return {
-    city,
-    temp,
-    humidity: 50 + Math.floor(Math.random() * 30),
-    ...condition,
-  };
-});
-
-publicApp.post('/api/app-action/:conversationId/:appId', async (req, res) => {
-  const { conversationId, appId } = req.params;
-  const { action, payload } = req.body;
-
-  if (!action || typeof action !== 'string') {
-    res.status(400).json({ ok: false, error: 'Action required' });
-    return;
-  }
-
-  const handler = appActionHandlers.get(action);
-  if (handler) {
-    try {
-      const result = await handler({ conversationId, appId, payload });
-      res.json({ ok: true, result });
-    } catch (err) {
-      res.status(500).json({ ok: false, error: (err as Error).message });
-    }
-  } else {
-    // No local handler - notify agent and ack
-    notifyAgent('app_action', { conversationId, appId, action, payload });
-    res.json({ ok: true });
-  }
-});
-
-// Widget error endpoint - receives errors from widgets and broadcasts to agent
-publicApp.post('/api/widget-error/:conversationId', (req, res) => {
-  const { conversationId } = req.params;
-  const { error, stack, timestamp, appId } = req.body;
-
-  if (!error || typeof error !== 'string') {
-    res.status(400).json({ ok: false, error: 'Error message required' });
-    return;
-  }
-
-  const widgetError: WidgetError = {
-    conversationId,
-    appId,
-    error,
-    stack,
-    timestamp: timestamp || new Date().toISOString(),
-  };
-
-  // Broadcast to SSE clients
-  broadcast({ type: SSEEventType.WIDGET_ERROR, ...widgetError });
-
-  // Notify agent
-  notifyAgent('widget_error', widgetError);
-
-  // Log for server-side visibility
-  console.error('[Widget Error]', conversationId, appId || 'unknown', error);
-
-  res.json({ ok: true });
-});
 
 // Widget log endpoint - receives logs from widgets and writes to disk
 publicApp.post('/api/widget-log', (req, res) => {
@@ -980,6 +815,45 @@ publicApp.post('/api/widget-log', (req, res) => {
   }
 });
 
+// ===================
+// Load app server-side handlers
+// ===================
+
+async function loadAppHandlers() {
+  const { build } = await import('esbuild');
+  let entries: fs.Dirent[];
+  try {
+    entries = fs.readdirSync(appsDir, { withFileTypes: true });
+  } catch {
+    return;
+  }
+
+  for (const entry of entries) {
+    if (!entry.isDirectory()) continue;
+    const handlerPath = path.join(appsDir, entry.name, 'index.mts');
+    if (!fs.existsSync(handlerPath)) continue;
+
+    try {
+      const result = await build({
+        entryPoints: [handlerPath],
+        bundle: true,
+        platform: 'node',
+        format: 'esm',
+        write: false,
+      });
+      const tmpFile = path.join(appsDir, entry.name, '.handler.mjs');
+      fs.writeFileSync(tmpFile, result.outputFiles![0].text);
+      const handler = await import(tmpFile);
+      const router = express.Router();
+      handler.default(router);
+      publicApp.use(`/widget/${entry.name}/api`, router);
+      console.log(`[Widget] Loaded handler: ${entry.name}`);
+    } catch (err) {
+      console.error(`[Widget] Failed to load handler for ${entry.name}:`, err);
+    }
+  }
+}
+
 // SPA catch-all - serve index.html for client-side routing
 publicApp.get('*', (req, res) => {
   res.sendFile(path.join(clientDist, 'index.html'));
@@ -989,15 +863,25 @@ publicApp.get('*', (req, res) => {
 // Start servers
 // ===================
 
-// Initialize push notifications
-initPush();
+async function start() {
+  // Initialize push notifications
+  initPush();
 
-const agentHost = process.env.AGENT_HOST || '127.0.0.1';
-agentApp.listen(Number(agentPort), agentHost, () => {
-  console.log(`Agent API running on ${agentHost}:${agentPort}`);
-});
+  // Load widget app handlers before starting servers
+  await loadAppHandlers();
 
-const publicHost = requireEnv('PUBLIC_HOST');
-publicApp.listen(Number(publicPort), publicHost, () => {
-  console.log(`Public API running on ${publicHost}:${publicPort}`);
+  const agentHost = process.env.AGENT_HOST || '127.0.0.1';
+  agentApp.listen(Number(agentPort), agentHost, () => {
+    console.log(`Agent API running on ${agentHost}:${agentPort}`);
+  });
+
+  const publicHost = requireEnv('PUBLIC_HOST');
+  publicApp.listen(Number(publicPort), publicHost, () => {
+    console.log(`Public API running on ${publicHost}:${publicPort}`);
+  });
+}
+
+start().catch(err => {
+  console.error('Failed to start server:', err);
+  process.exit(1);
 });

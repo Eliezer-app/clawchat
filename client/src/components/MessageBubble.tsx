@@ -1,26 +1,29 @@
-import { Show, JSX, createMemo } from 'solid-js';
+import { Show, JSX } from 'solid-js';
 import type { Message } from '@clawchat/shared';
 import AudioPlayer from './AudioPlayer';
 import { formatTime, formatSize } from '../format';
-import { stayAtBottomIfNeeded } from '../scrollAnchor';
-import { extractWidgets, openWidgetInNewTab } from '../widget';
+
+
+const WIDGET_IFRAME_RE = /<iframe\s+[^>]*?src="(\/widget\/[^"]+)"/;
 
 interface MessageBubbleProps {
   message: Message;
   onDelete: (id: string) => void;
   onImageClick: (src: string, filename: string) => void;
-  renderContent: (text: string, conversationId: string) => JSX.Element[];
+  renderContent: (text: string) => JSX.Element[];
 }
 
 export default function MessageBubble(props: MessageBubbleProps) {
   const msg = props.message;
 
-  const widgets = createMemo(() => extractWidgets(msg.content));
+  const widgetSrc = () => {
+    const match = msg.content.match(WIDGET_IFRAME_RE);
+    return match ? match[1] : null;
+  };
 
   const handleOpenWidget = () => {
-    if (widgets().length === 1) {
-      openWidgetInNewTab(msg.id, msg.conversationId);
-    }
+    const src = widgetSrc();
+    if (src) window.open(src, '_blank');
   };
 
   const getFileUrl = () => {
@@ -35,10 +38,10 @@ export default function MessageBubble(props: MessageBubbleProps) {
     <div id={`msg-${msg.id}`} class={`message ${msg.role}`}>
       <div class="bubble">
         <button class="delete-btn" onClick={() => props.onDelete(msg.id)}>×</button>
-        <Show when={widgets().length > 0}>
+        <Show when={widgetSrc()}>
           <button class="open-widget-btn" onClick={handleOpenWidget} title="Open widget in new tab">⧉</button>
         </Show>
-        <Show when={msg.content}>{props.renderContent(msg.content, msg.conversationId)}</Show>
+        <Show when={msg.content}>{props.renderContent(msg.content)}</Show>
         <Show when={msg.attachment}>
           {(att) => (
             <Show
@@ -65,7 +68,6 @@ export default function MessageBubble(props: MessageBubbleProps) {
                 alt={att().filename}
                 loading="lazy"
                 onClick={() => props.onImageClick(getFileUrl(), att().filename)}
-                onLoad={stayAtBottomIfNeeded}
                 style={{ cursor: 'pointer' }}
               />
             </Show>

@@ -1,5 +1,5 @@
 import { createSignal, onMount, For, createEffect, Show, Switch, Match, JSX } from 'solid-js';
-import { SSEEventType, WidgetApi } from '@clawchat/shared';
+import { SSEEventType } from '@clawchat/shared';
 import type { Message } from '@clawchat/shared';
 import { marked } from 'marked';
 import CodeBlock from './components/CodeBlock';
@@ -11,6 +11,7 @@ import SettingsModal, { useShouldPromptNotifications } from './components/Settin
 import { AuthChecking, AuthLocked } from './components/AuthScreens';
 import Toast from './components/Toast';
 import { useActivityTracking } from './hooks/useActivityTracking';
+import { initScrollTracking, scrollToBottom } from './scrollAnchor';
 import './Main.css';
 
 marked.use({ breaks: true, gfm: true });
@@ -42,12 +43,12 @@ export default function Main() {
   };
 
   // Auto-scroll to bottom when new messages arrive or typing indicator shows
+  // `ready` stays false during initial load so we can respect URL hash anchors
+  let ready = false;
   createEffect(() => {
     messages();
     agentTyping();
-    if (messagesContainer) {
-      messagesContainer.scrollTop = messagesContainer.scrollHeight;
-    }
+    if (ready) scrollToBottom();
   });
 
   onMount(async () => {
@@ -74,23 +75,18 @@ export default function Main() {
     // Handle Android back button
     window.addEventListener('popstate', () => closeLightbox());
 
-    // Scroll to bottom on focus/visibility
-    const scrollToBottom = () => {
-      const container = document.querySelector('.messages');
-      if (container) {
-        container.scrollTop = container.scrollHeight;
-      }
-    };
-    window.addEventListener('focus', scrollToBottom);
-    document.addEventListener('visibilitychange', () => {
-      if (document.visibilityState === 'visible') scrollToBottom();
-    });
 
     // Load messages
     try {
       const res = await fetch('/api/messages');
       if (res.ok) {
         setMessages(await res.json());
+        if (location.hash) {
+          document.getElementById(location.hash.slice(1))?.scrollIntoView({ behavior: 'instant', block: 'start' });
+        } else {
+          scrollToBottom();
+        }
+        ready = true;
       }
     } catch (e) {
       console.error('Failed to load messages:', e);
@@ -98,7 +94,7 @@ export default function Main() {
 
     // SSE connection
     function connectSSE() {
-      const events = new EventSource(WidgetApi.events);
+      const events = new EventSource('/api/events');
       events.onmessage = (e) => {
         try {
           const data = JSON.parse(e.data);
@@ -112,11 +108,13 @@ export default function Main() {
             case SSEEventType.UPDATE:
               setMessages(msgs => msgs.map(m => m.id === data.message.id ? data.message : m));
               break;
-            case SSEEventType.APP_STATE_UPDATED:
-              window.dispatchEvent(new CustomEvent('appStateUpdated', {
-                detail: { conversationId: data.conversationId, appId: data.appId }
-              }));
+            case SSEEventType.APP_STATE_UPDATED: {
+              // Bridge server event to BroadcastChannel so widgets get notified
+              const ch = new BroadcastChannel(`app:${data.appId}`);
+              ch.postMessage({ type: 'stateUpdated', appId: data.appId });
+              ch.close();
               break;
+            }
             case SSEEventType.AGENT_STATUS:
               const wasConnected = agentConnected();
               setAgentConnected(data.connected);
@@ -214,33 +212,40 @@ export default function Main() {
     return <div class="markdown" innerHTML={html} />;
   };
 
-  const renderContent = (text: string, conversationId: string): JSX.Element[] => {
-    const codeBlockRegex = /```(\w*)\n?([\s\S]*?)```/g;
-    const parts: (string | { lang: string; code: string })[] = [];
+  // Escape iframes not matching allowed src patterns
+  const ALLOWED_IFRAME_SRC = /src="(\/widget\/[^"]+|data:text\/html[^"]+)"/i;
+  const escapeIframes = (text: string): string =>
+    text.replace(/<iframe\b[^>]*>/gi, (tag) => ALLOWED_IFRAME_SRC.test(tag) ? tag : '&lt;iframe');
+
+  const renderContent = (text: string): JSX.Element[] => {
+    // Match code blocks and widget iframes (served or inline data URLs)
+    const blockRegex = /```(\w*)\n?([\s\S]*?)```|<iframe\s+[^>]*?src="(\/widget\/[^"]+|data:text\/html[^"]+)"[^>]*>(?:\s*<\/iframe>)?/gi;
+    const parts: JSX.Element[] = [];
     let lastIndex = 0;
     let match;
 
-    while ((match = codeBlockRegex.exec(text)) !== null) {
+    while ((match = blockRegex.exec(text)) !== null) {
       if (match.index > lastIndex) {
-        parts.push(text.slice(lastIndex, match.index));
+        parts.push(renderMarkdown(escapeIframes(text.slice(lastIndex, match.index))));
       }
-      const lang = match[1] || '';
-      const code = match[2]?.trim() || '';
-      parts.push({ lang, code });
+      if (match[1] !== undefined || match[2] !== undefined) {
+        // Code block
+        const lang = match[1] || '';
+        const code = (match[2] || '').trim();
+        parts.push(<CodeBlock lang={lang} code={code} />);
+      } else if (match[3]) {
+        // Widget iframe — render as component
+        const src = match[3];
+        parts.push(<Widget src={src} />);
+      }
       lastIndex = match.index + match[0].length;
     }
 
     if (lastIndex < text.length) {
-      parts.push(text.slice(lastIndex));
+      parts.push(renderMarkdown(escapeIframes(text.slice(lastIndex))));
     }
 
-    return parts.map((part) =>
-      typeof part === 'string'
-        ? renderMarkdown(part)
-        : part.lang === 'widget'
-          ? <Widget code={part.code} conversationId={conversationId} />
-          : <CodeBlock lang={part.lang} code={part.code} />
-    ) as JSX.Element[];
+    return parts;
   };
 
   return (
@@ -269,7 +274,15 @@ export default function Main() {
               />
             </Show>
 
-            <div class="messages" ref={messagesContainer} onClick={(e) => {
+            <div class="messages" ref={(el) => { messagesContainer = el; initScrollTracking(el); }} onClick={(e) => {
+              const anchor = (e.target as HTMLElement).closest('a[href^="#msg-"]') as HTMLAnchorElement;
+              if (anchor) {
+                e.preventDefault();
+                const id = anchor.getAttribute('href')!.slice(1);
+                document.getElementById(id)?.scrollIntoView({ behavior: 'instant', block: 'start' });
+                history.replaceState(null, '', anchor.getAttribute('href')!);
+                return;
+              }
               const img = (e.target as HTMLElement).closest('.markdown img') as HTMLImageElement;
               if (img) openLightbox(img.src, img.alt || 'image');
             }}>
