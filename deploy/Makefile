@@ -64,3 +64,22 @@ install-nginx:
 ssl:
 	sudo apt-get install -y certbot python3-certbot-nginx
 	sudo certbot --nginx -d $(DOMAIN)
+
+push-setup:
+	@if [ -f $(APP_DIR)/.env ] && grep -q "^VAPID_PUBLIC_KEY=" $(APP_DIR)/.env; then \
+		echo "VAPID keys already exist in .env"; \
+	else \
+		echo "Generating VAPID keys..."; \
+		KEYS=$$(npx web-push generate-vapid-keys --json 2>/dev/null); \
+		PUBLIC=$$(echo "$$KEYS" | grep -o '"publicKey":"[^"]*"' | cut -d'"' -f4); \
+		PRIVATE=$$(echo "$$KEYS" | grep -o '"privateKey":"[^"]*"' | cut -d'"' -f4); \
+		sed -i '/^#.*VAPID/d; /^#.*Push notification/d' $(APP_DIR)/.env; \
+		echo "" >> $(APP_DIR)/.env; \
+		echo "# Push notification VAPID keys" >> $(APP_DIR)/.env; \
+		echo "VAPID_PUBLIC_KEY=$$PUBLIC" >> $(APP_DIR)/.env; \
+		echo "VAPID_PRIVATE_KEY=$$PRIVATE" >> $(APP_DIR)/.env; \
+		echo "VAPID_SUBJECT=mailto:admin@localhost" >> $(APP_DIR)/.env; \
+		echo "VAPID keys added to .env"; \
+		echo "Restarting server..."; \
+		sudo systemctl restart clawchat; \
+	fi

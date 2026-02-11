@@ -1,4 +1,4 @@
-.PHONY: dev build typecheck lint clean install push-setup push-rotate-keys connect-mock-agent connect-dev-agent api-docs invite prod-deploy prod-start prod-stop prod-status prod-logs prod-logs-all prod-logs-clear prod-git-unlock
+.PHONY: dev build typecheck lint clean install push-setup push-rotate-keys connect-mock-agent connect-dev-agent api-docs invite prod-deploy prod-start prod-stop prod-status prod-logs prod-logs-all prod-logs-clear prod-push-setup prod-git-unlock
 
 # Development
 dev: connect-dev-agent
@@ -115,6 +115,9 @@ prod-logs-all:
 
 prod-logs-clear:
 	sudo journalctl --rotate && sudo journalctl --vacuum-time=1s -u clawchat
+
+prod-push-setup:
+	$(MAKE) -C deploy push-setup
 
 prod-git-unlock:
 	@echo 'eval "$$(ssh-agent -s)" && ssh-add /root/.ssh/git_access'
