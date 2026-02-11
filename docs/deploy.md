@@ -1,98 +1,43 @@
 # Deployment
 
-## Prerequisites
+## Setup
 
 ```bash
-# Node 20+, pnpm
-corepack enable
+git clone https://github.com/clawchat/clawchat.git /opt/clawchat
+cd /opt/clawchat
+cp .env.example .env   # edit with your settings
+cd deploy
+make setup DOMAIN=chat.example.com
 ```
 
-## Build
+This installs Node 20, builds the app, configures systemd and nginx with SSL.
+
+## Update
 
 ```bash
-git clone https://github.com/clawchat/clawchat.git && cd clawchat
-pnpm install
-pnpm --filter @clawchat/client build   # outputs to client/dist
-pnpm --filter @clawchat/server build   # outputs to server/dist
+make prod-deploy
 ```
 
-## Run Server
+Pulls latest code, rebuilds, restarts the service.
+
+## Push Notifications
 
 ```bash
-cd server
-PUBLIC_HOST=0.0.0.0 PUBLIC_PORT=3101 AGENT_PORT=3100 node dist/index.js
+cd /opt/clawchat/deploy
+make push-setup
 ```
 
-Data persists in `server/data/` (SQLite DB + uploads).
+Generates VAPID keys, adds them to `.env`, restarts the service.
 
-## Nginx + SSL
+## Operations
 
 ```bash
-sudo apt install nginx certbot python3-certbot-nginx
-```
-
-Create `/etc/nginx/sites-available/clawchat`:
-
-```nginx
-server {
-    listen 80;
-    server_name chat.example.com;
-
-    location /api/ {
-        proxy_pass http://127.0.0.1:3101;
-        proxy_http_version 1.1;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header Connection '';  # SSE
-        proxy_buffering off;             # SSE
-        proxy_read_timeout 86400;        # SSE long-lived
-    }
-
-    location / {
-        proxy_pass http://127.0.0.1:3101;
-        proxy_http_version 1.1;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-    }
-}
-```
-
-Enable and get SSL:
-
-```bash
-sudo ln -s /etc/nginx/sites-available/clawchat /etc/nginx/sites-enabled/
-sudo nginx -t && sudo systemctl reload nginx
-sudo certbot --nginx -d chat.example.com
-```
-
-Certbot auto-renews via systemd timer.
-
-## systemd Service
-
-Create `/etc/systemd/system/clawchat.service`:
-
-```ini
-[Unit]
-Description=ClawChat Server
-After=network.target
-
-[Service]
-Type=simple
-WorkingDirectory=/opt/clawchat/server
-ExecStart=/usr/bin/node dist/index.js
-Environment=PUBLIC_HOST=127.0.0.1
-Environment=PUBLIC_PORT=3101
-Environment=AGENT_PORT=3100
-Restart=always
-RestartSec=5
-
-[Install]
-WantedBy=multi-user.target
-```
-
-```bash
-sudo systemctl daemon-reload
-sudo systemctl enable --now clawchat
+make prod-status        # systemd status + health check
+make prod-logs          # follow logs
+make prod-logs-all      # all logs in pager
+make prod-logs-clear    # clear logs
+make prod-start         # start service
+make prod-stop          # stop service
 ```
 
 ## Authentication
@@ -110,7 +55,7 @@ This prints a QR code + URL. Scan with phone or open the link. Invite expires in
 
 ### How It Works
 
-1. Admin runs `pnpm agent-invite` on server
+1. Admin runs `pnpm invite` on server
 2. User scans QR or visits invite URL
 3. Server creates session, sets httpOnly cookie
 4. User is redirected to the app, authenticated
@@ -118,14 +63,15 @@ This prints a QR code + URL. Scan with phone or open the link. Invite expires in
 
 Unauthenticated users see a "scan to join" page at `/invite`.
 
-### Endpoints
-
-- `GET /api/auth/invite?token=...` — verify invite, create session
-- `GET /api/auth/me` — check authentication status
-- `POST /api/auth/logout` — clear session
-
 ## Security
 
-- **Agent API** (port 3100): Binds to `127.0.0.1` only. Never expose externally — it's for local agent use (OpenClaw, scripts, etc.)
+- **Agent API** (port 3100): Binds to `127.0.0.1` only. Never expose externally — it's for local agent use.
 - **Public API** (port 3101): Requires session auth for all routes except `/api/health` and `/invite`
 - **Sessions**: httpOnly cookies, no localStorage tokens
+
+## Files
+
+- `deploy/Makefile` — setup and one-off targets
+- `deploy/clawchat.service` — systemd unit
+- `deploy/nginx.conf` — nginx site config (DOMAIN placeholder)
+- `.env.example` — env template
