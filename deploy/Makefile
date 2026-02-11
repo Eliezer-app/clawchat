@@ -14,6 +14,7 @@ endif
 deploy:
 	cd $(APP_DIR) && git pull
 	cd $(APP_DIR) && corepack enable && pnpm install
+	cd $(APP_DIR) && pnpm --filter @clawchat/shared build
 	cd $(APP_DIR) && pnpm --filter @clawchat/client build
 	cd $(APP_DIR) && pnpm --filter @clawchat/server build
 	sudo systemctl restart clawchat
@@ -44,6 +45,7 @@ install-deps:
 	cd $(APP_DIR) && pnpm install
 
 build:
+	cd $(APP_DIR) && pnpm --filter @clawchat/shared build
 	cd $(APP_DIR) && pnpm --filter @clawchat/client build
 	cd $(APP_DIR) && pnpm --filter @clawchat/server build
 
