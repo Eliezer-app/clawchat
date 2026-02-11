@@ -1,4 +1,4 @@
-.PHONY: dev build typecheck lint clean install push-setup push-rotate-keys connect-mock-agent connect-dev-agent api-docs invite prod-deploy prod-start prod-stop prod-logs prod-logs-all prod-git-unlock
+.PHONY: dev build typecheck lint clean install push-setup push-rotate-keys connect-mock-agent connect-dev-agent api-docs invite prod-deploy prod-start prod-stop prod-status prod-logs prod-logs-all prod-git-unlock
 
 # Development
 dev: connect-dev-agent
@@ -96,6 +96,9 @@ prod-start:
 
 prod-stop:
 	systemctl stop clawchat
+
+prod-status:
+	@systemctl status clawchat --no-pager || true
 
 prod-deploy:
 	$(MAKE) -C deploy deploy
