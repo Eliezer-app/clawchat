@@ -99,6 +99,8 @@ prod-stop:
 
 prod-status:
 	@systemctl status clawchat --no-pager || true
+	@echo ""
+	@curl -sf http://127.0.0.1:3101/api/health && echo || echo "Health check failed"
 
 prod-deploy:
 	$(MAKE) -C deploy deploy
