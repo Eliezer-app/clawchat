@@ -1,7 +1,7 @@
 .PHONY: dev build typecheck lint clean install push-setup push-rotate-keys connect-mock-agent connect-dev-agent api-docs invite
 
 # Development
-dev: connect-mock-agent
+dev: connect-dev-agent
 
 connect-mock-agent:
 	cp .env.mock .env

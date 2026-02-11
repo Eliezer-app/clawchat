@@ -63,7 +63,7 @@ Logs are written to `server/data/widget-logs/`.
 
 - **Resize** — Parent-side ResizeObserver auto-sizes the iframe to fit content (file-based only)
 - **Injected CSS** — `html, body { height: auto; min-height: 0; overflow: hidden; }` prevents scrollbars and viewport unit issues
-- **Sandbox** — File-based: `allow-scripts allow-same-origin`. Data URL: `allow-scripts` only
+- **Sandbox** — File-based: none (same-origin, full trust). Data URL: `allow-scripts` only
 - **Lazy loading** — Widgets are created when within 500px of the viewport and destroyed when scrolled away
 
 ## Shared State

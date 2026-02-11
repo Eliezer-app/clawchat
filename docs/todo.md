@@ -26,3 +26,5 @@ Allow the agent API to signal "typing" state to the chat UI.
 - [x] Client shows typing indicator (animated dots) below messages
 - [x] Auto-clear on agent disconnect or message send
 - [x] Typing indicator disappears when new agent message arrives
+- [ ] Move stop button by the typing bubble
+- [ ] Fix scroll to bottom on page load — does not reliably stay at bottom when images/widgets load

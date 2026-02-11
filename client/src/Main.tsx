@@ -85,6 +85,7 @@ export default function Main() {
           document.getElementById(location.hash.slice(1))?.scrollIntoView({ behavior: 'instant', block: 'start' });
         } else {
           scrollToBottom();
+          setTimeout(scrollToBottom, 500);
         }
         ready = true;
       }
@@ -262,7 +263,7 @@ export default function Main() {
         <>
           <div class="app">
             <header class={`header ${agentConnected() ? '' : 'agent-offline'}`}>
-              <span class="header-title">ClawChat</span>
+              <a href="/" class="header-title" onClick={(e) => { if (!e.metaKey && !e.ctrlKey) { e.preventDefault(); scrollToBottom(); } }}>ClawChat</a>
               <button class="settings-btn" onClick={() => setShowSettings(true)} title="Settings">⚙</button>
             </header>
 

@@ -67,7 +67,7 @@ export default function Widget(props: WidgetProps) {
         <iframe
           ref={(el) => { iframeRef = el; el.addEventListener('load', handleLoad); }}
           src={props.src}
-          sandbox={isDataUrl() ? 'allow-scripts' : 'allow-scripts allow-same-origin'}
+          sandbox={isDataUrl() ? 'allow-scripts' : undefined}
           class="widget-iframe"
           style={{ height: height() + 'px' }}
         />

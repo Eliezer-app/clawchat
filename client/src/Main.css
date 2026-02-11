@@ -89,6 +89,8 @@ body {
 
 .header-title {
   flex: 1;
+  color: inherit;
+  text-decoration: none;
 }
 
 .settings-btn {
