@@ -1,4 +1,4 @@
-.PHONY: dev build typecheck lint clean install push-setup push-rotate-keys connect-mock-agent connect-dev-agent api-docs invite
+.PHONY: dev build typecheck lint clean install push-setup push-rotate-keys connect-mock-agent connect-dev-agent api-docs invite prod-deploy prod-start prod-stop prod-logs prod-logs-all prod-git-unlock
 
 # Development
 dev: connect-dev-agent
@@ -89,6 +89,25 @@ push-rotate-keys:
 # Create invite token
 invite:
 	docker compose exec server pnpm run invite
+
+# Production
+prod-start:
+	systemctl start clawchat
+
+prod-stop:
+	systemctl stop clawchat
+
+prod-deploy:
+	$(MAKE) -C deploy deploy
+
+prod-logs:
+	journalctl -u clawchat -f
+
+prod-logs-all:
+	journalctl -u clawchat --no-pager | less
+
+prod-git-unlock:
+	@echo 'eval "$$(ssh-agent -s)" && ssh-add /root/.ssh/git_access'
 
 # Print Agent API docs (extracted from source comments)
 api-docs:
