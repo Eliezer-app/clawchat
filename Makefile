@@ -56,13 +56,15 @@ clean:
 
 # Setup push notifications (generate VAPID keys and add to .env)
 push-setup:
-	@if [ -f .env ] && grep -q "VAPID_PUBLIC_KEY" .env; then \
+	@if [ -f .env ] && grep -q "^VAPID_PUBLIC_KEY=" .env; then \
 		echo "VAPID keys already exist in .env"; \
 	else \
 		echo "Generating VAPID keys..."; \
 		KEYS=$$(docker compose exec server npx web-push generate-vapid-keys --json 2>/dev/null); \
 		PUBLIC=$$(echo "$$KEYS" | grep -o '"publicKey":"[^"]*"' | cut -d'"' -f4); \
 		PRIVATE=$$(echo "$$KEYS" | grep -o '"privateKey":"[^"]*"' | cut -d'"' -f4); \
+		sed -i '' '/^#.*VAPID/d' .env; \
+		sed -i '' '/^#.*Push notification/d' .env; \
 		echo "" >> .env; \
 		echo "# Push notification VAPID keys" >> .env; \
 		echo "VAPID_PUBLIC_KEY=$$PUBLIC" >> .env; \
