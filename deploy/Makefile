@@ -4,6 +4,8 @@ APP_DIR = /opt/clawchat
 
 # Full setup: install everything, build, configure systemd + nginx + ssl
 setup: require-domain install-node install-deps build install-service install-nginx ssl
+	@echo ""
+	@echo "Setup complete. To enable push notifications, run: make push-setup"
 
 require-domain:
 ifndef DOMAIN
