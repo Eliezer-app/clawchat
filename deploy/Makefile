@@ -52,10 +52,15 @@ build:
 	cd $(APP_DIR) && pnpm --filter @clawchat/server build
 
 install-service:
+	@id -u clawchat >/dev/null 2>&1 || (sudo useradd -r -s /usr/sbin/nologin clawchat && echo "Created clawchat user")
+	sudo mkdir -p $(APP_DIR)/server/data $(APP_DIR)/apps /opt/eliezer/chat-public
 	@test -f $(APP_DIR)/.env || (cp $(APP_DIR)/.env.example $(APP_DIR)/.env && echo "Created .env from .env.example — edit before starting")
+	sudo chown -R clawchat:clawchat $(APP_DIR)/server/data $(APP_DIR)/apps /opt/eliezer/chat-public
+	sudo chown clawchat:clawchat $(APP_DIR)/.env
 	sudo cp $(APP_DIR)/deploy/clawchat.service /etc/systemd/system/
 	sudo systemctl daemon-reload
-	sudo systemctl enable --now clawchat
+	sudo systemctl enable clawchat
+	sudo systemctl restart clawchat
 
 install-nginx:
 	sudo apt-get install -y nginx
