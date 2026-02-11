@@ -9,6 +9,9 @@ setup: require-domain install-node install-deps build install-service install-ng
 
 require-domain:
 ifndef DOMAIN
+	$(eval DOMAIN := $(shell grep '^BASE_URL=' $(APP_DIR)/.env 2>/dev/null | sed 's|BASE_URL=https://||'))
+endif
+ifndef DOMAIN
 	$(error DOMAIN is required. Usage: make setup DOMAIN=chat.example.com)
 endif
 
