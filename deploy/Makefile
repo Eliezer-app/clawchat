@@ -54,7 +54,8 @@ build:
 install-service:
 	@id -u clawchat >/dev/null 2>&1 || (sudo useradd -r -s /usr/sbin/nologin clawchat && echo "Created clawchat user")
 	sudo mkdir -p $(APP_DIR)/server/data $(APP_DIR)/apps /opt/eliezer/chat-public
-	@test -f $(APP_DIR)/.env || (cp $(APP_DIR)/.env.example $(APP_DIR)/.env && echo "Created .env from .env.example — edit before starting")
+	@test -f $(APP_DIR)/.env || (cp $(APP_DIR)/.env.example $(APP_DIR)/.env && echo "Created .env from .env.example")
+	@grep -q "^BASE_URL=" $(APP_DIR)/.env || echo "BASE_URL=https://$(DOMAIN)" >> $(APP_DIR)/.env
 	sudo chown -R clawchat:clawchat $(APP_DIR)/server/data $(APP_DIR)/apps /opt/eliezer/chat-public
 	sudo chown clawchat:clawchat $(APP_DIR)/.env
 	sudo cp $(APP_DIR)/deploy/clawchat.service /etc/systemd/system/

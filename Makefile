@@ -1,4 +1,4 @@
-.PHONY: dev build typecheck lint clean install push-setup push-rotate-keys connect-mock-agent connect-dev-agent api-docs invite prod-deploy prod-start prod-stop prod-status prod-logs prod-logs-all prod-logs-clear prod-git-unlock
+.PHONY: dev build typecheck lint clean install push-setup push-rotate-keys connect-mock-agent connect-dev-agent api-docs invite prod-deploy prod-start prod-stop prod-status prod-logs prod-logs-all prod-logs-clear prod-invite prod-git-unlock
 
 # Development
 dev: connect-dev-agent
@@ -91,6 +91,9 @@ push-rotate-keys:
 # Create invite token
 invite:
 	docker compose exec server pnpm run invite
+
+prod-invite:
+	cd /opt/clawchat && pnpm run invite
 
 # Production
 prod-start:
