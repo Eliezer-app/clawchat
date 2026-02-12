@@ -295,15 +295,11 @@ export function createPushSubscription(sessionId: string, endpoint: string, p256
   const id = crypto.randomUUID();
   const createdAt = new Date().toISOString();
 
-  // Upsert - if endpoint exists, update it
+  // One subscription per session — delete old before inserting new
+  db().prepare('DELETE FROM push_subscriptions WHERE sessionId = ?').run(sessionId);
   db().prepare(`
     INSERT INTO push_subscriptions (id, sessionId, endpoint, p256dh, auth, createdAt)
     VALUES (?, ?, ?, ?, ?, ?)
-    ON CONFLICT(endpoint) DO UPDATE SET
-      sessionId = excluded.sessionId,
-      p256dh = excluded.p256dh,
-      auth = excluded.auth,
-      createdAt = excluded.createdAt
   `).run(id, sessionId, endpoint, p256dh, auth, createdAt);
 
   return { id, sessionId, endpoint, p256dh, auth, createdAt };
