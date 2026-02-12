@@ -128,7 +128,7 @@ function createMessage(role: Message['role'], content: string, opts?: { conversa
   if (role === 'agent' && (opts?.type || 'message') === 'message') {
     const preview = content.length > 100 ? content.slice(0, 100) + '...' : content;
     sendPushToAll({
-      title: appName,
+      title: 'New message',
       body: preview,
       tag: 'clawchat-message',
       data: { messageId: message.id },
