@@ -46,24 +46,25 @@ export function usePushNotifications() {
 
   async function subscribe(): Promise<boolean> {
     try {
-      // Register service worker
-      const registration = await navigator.serviceWorker.register('/sw.js');
-      await navigator.serviceWorker.ready;
-
-      // Get VAPID public key
-      const keyResponse = await fetch('/api/push/vapid-public-key');
-      if (!keyResponse.ok) {
-        console.error('Push not configured on server');
-        return false;
-      }
-      const { publicKey } = await keyResponse.json();
-
-      // Request permission
+      // Request permission FIRST — must be called immediately from user gesture
+      // on iOS Safari, or the gesture context is lost and permission silently fails
       const permission = await Notification.requestPermission();
       if (permission !== 'granted') {
         setState('denied');
         return false;
       }
+
+      // Now do async setup work
+      const [registration, keyResponse] = await Promise.all([
+        navigator.serviceWorker.register('/sw.js').then(() => navigator.serviceWorker.ready),
+        fetch('/api/push/vapid-public-key'),
+      ]);
+
+      if (!keyResponse.ok) {
+        console.error('Push not configured on server');
+        return false;
+      }
+      const { publicKey } = await keyResponse.json();
 
       // Subscribe to push
       const subscription = await registration.pushManager.subscribe({

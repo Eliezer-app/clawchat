@@ -60,7 +60,8 @@ export async function sendPushToAll(payload: PushPayload): Promise<void> {
               auth: sub.auth,
             },
           },
-          payloadStr
+          payloadStr,
+          { urgency: 'high' }
         );
       } catch (err) {
         const error = err as { statusCode?: number };

@@ -51,6 +51,67 @@ export default function Main() {
     if (ready) scrollToBottom();
   });
 
+  let sse: EventSource | null = null;
+
+  function connectSSE() {
+    sse?.close();
+    const events = new EventSource('/api/events');
+    sse = events;
+    events.onmessage = (e) => {
+      try {
+        const data = JSON.parse(e.data);
+        switch (data.type) {
+          case SSEEventType.MESSAGE:
+            setMessages(msgs => [...msgs, data.message]);
+            break;
+          case SSEEventType.DELETE:
+            setMessages(msgs => msgs.filter(m => m.id !== data.id));
+            break;
+          case SSEEventType.UPDATE:
+            setMessages(msgs => msgs.map(m => m.id === data.message.id ? data.message : m));
+            break;
+          case SSEEventType.APP_STATE_UPDATED: {
+            const ch = new BroadcastChannel(`app:${data.appId}`);
+            ch.postMessage({ type: 'stateUpdated', appId: data.appId });
+            ch.close();
+            break;
+          }
+          case SSEEventType.AGENT_STATUS:
+            const wasConnected = agentConnected();
+            setAgentConnected(data.connected);
+            if (data.connected && !wasConnected) {
+              setToast('Agent connected');
+              setTimeout(() => setToast(null), 4000);
+            } else if (!data.connected && (wasConnected || data.error)) {
+              setToast(`Agent offline: ${data.error || 'Connection failed'}`);
+              setTimeout(() => setToast(null), 4000);
+            }
+            break;
+          case SSEEventType.AGENT_TYPING:
+            setAgentTyping(data.active);
+            break;
+          case SSEEventType.SCROLL_TO_MESSAGE:
+            document.getElementById(`msg-${data.messageId}`)?.scrollIntoView({ behavior: 'instant', block: 'center' });
+            break;
+        }
+      } catch (err) {
+        console.error('SSE parse error:', err);
+      }
+    };
+    events.onerror = () => {
+      events.close();
+      setTimeout(connectSSE, 3000);
+    };
+  }
+
+  async function refreshMessages() {
+    try {
+      const res = await fetch('/api/messages');
+      if (res.ok) setMessages(await res.json());
+    } catch {}
+    connectSSE();
+  }
+
   onMount(async () => {
     // Check authentication
     try {
@@ -93,58 +154,12 @@ export default function Main() {
       console.error('Failed to load messages:', e);
     }
 
-    // SSE connection
-    function connectSSE() {
-      const events = new EventSource('/api/events');
-      events.onmessage = (e) => {
-        try {
-          const data = JSON.parse(e.data);
-          switch (data.type) {
-            case SSEEventType.MESSAGE:
-              setMessages(msgs => [...msgs, data.message]);
-              break;
-            case SSEEventType.DELETE:
-              setMessages(msgs => msgs.filter(m => m.id !== data.id));
-              break;
-            case SSEEventType.UPDATE:
-              setMessages(msgs => msgs.map(m => m.id === data.message.id ? data.message : m));
-              break;
-            case SSEEventType.APP_STATE_UPDATED: {
-              // Bridge server event to BroadcastChannel so widgets get notified
-              const ch = new BroadcastChannel(`app:${data.appId}`);
-              ch.postMessage({ type: 'stateUpdated', appId: data.appId });
-              ch.close();
-              break;
-            }
-            case SSEEventType.AGENT_STATUS:
-              const wasConnected = agentConnected();
-              setAgentConnected(data.connected);
-              // Show toast on state change, or on new error while already disconnected
-              if (data.connected && !wasConnected) {
-                setToast('Agent connected');
-                setTimeout(() => setToast(null), 4000);
-              } else if (!data.connected && (wasConnected || data.error)) {
-                setToast(`Agent offline: ${data.error || 'Connection failed'}`);
-                setTimeout(() => setToast(null), 4000);
-              }
-              break;
-            case SSEEventType.AGENT_TYPING:
-              setAgentTyping(data.active);
-              break;
-            case SSEEventType.SCROLL_TO_MESSAGE:
-              document.getElementById(`msg-${data.messageId}`)?.scrollIntoView({ behavior: 'instant', block: 'center' });
-              break;
-          }
-        } catch (err) {
-          console.error('SSE parse error:', err);
-        }
-      };
-      events.onerror = () => {
-        events.close();
-        setTimeout(connectSSE, 3000);
-      };
-    }
     connectSSE();
+
+    // Re-fetch messages when app returns from background (iOS kills SSE)
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible') refreshMessages();
+    });
   });
 
   const handleSend = async (content: string, file: File | null) => {
@@ -264,6 +279,7 @@ export default function Main() {
           <div class="app">
             <header class={`header ${agentConnected() ? '' : 'agent-offline'}`}>
               <a href="/" class="header-title" onClick={(e) => { if (!e.metaKey && !e.ctrlKey) { e.preventDefault(); scrollToBottom(); } }}>ClawChat</a>
+              <button class="settings-btn" onClick={() => { refreshMessages(); scrollToBottom(); }} title="Refresh">↻</button>
               <button class="settings-btn" onClick={() => setShowSettings(true)} title="Settings">⚙</button>
             </header>
 

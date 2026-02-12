@@ -23,8 +23,6 @@ self.addEventListener('push', (event) => {
     icon: '/icon-192.png',
     badge: '/icon-192.png',
     tag: payload.tag || 'clawchat-message',
-    renotify: true,
-    requireInteraction: true,
     data: payload.data || {},
   };
 
@@ -34,8 +32,17 @@ self.addEventListener('push', (event) => {
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();
 
-  // Open/focus the app
-  event.waitUntil(clients.openWindow('/'));
+  // Focus existing window or open new one
+  event.waitUntil(
+    clients.matchAll({ type: 'window', includeUncontrolled: true }).then((windowClients) => {
+      for (const client of windowClients) {
+        if (client.url.startsWith(self.location.origin) && 'focus' in client) {
+          return client.focus();
+        }
+      }
+      return clients.openWindow('/');
+    })
+  );
 });
 
 self.addEventListener('pushsubscriptionchange', (event) => {
