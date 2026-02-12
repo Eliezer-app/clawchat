@@ -785,28 +785,21 @@ publicApp.post('/api/app-state/:appId', (req, res) => {
 });
 
 
-// Widget log endpoint - receives logs from widgets and writes to disk
-publicApp.post('/api/widget-log', (req, res) => {
-  const { widgetPath, line, data } = req.body;
+// Widget log endpoint - JSON body is written as-is to apps/<app-id>/logs/<yyyy-mm-dd>.log
+publicApp.post('/api/widget-log/:appId', (req, res) => {
+  const { appId } = req.params;
 
-  if (!widgetPath || typeof widgetPath !== 'string') {
-    res.status(400).json({ ok: false, error: 'widgetPath required' });
-    return;
-  }
-
-  // Sanitize: no .. traversal, only alphanumeric/dash/underscore/slash
-  if (widgetPath.includes('..') || !/^[\w\-/]+$/.test(widgetPath)) {
-    res.status(400).json({ ok: false, error: 'Invalid widgetPath' });
+  if (!/^[\w-]+$/.test(appId)) {
+    res.status(400).json({ ok: false, error: 'Invalid appId' });
     return;
   }
 
   const now = new Date();
-  const day = now.toISOString().slice(0, 10); // YYYY-MM-DD
-  const time = now.toTimeString().slice(0, 8); // HH:MM:SS
-  const lineStr = line ? ` L${line}` : '';
-  const logLine = `${time}${lineStr} ${data}\n`;
+  const day = now.toISOString().slice(0, 10);
+  const time = now.toTimeString().slice(0, 8);
+  const logLine = `${time} ${JSON.stringify(req.body)}\n`;
 
-  const logDir = path.join(appsDir, widgetPath, 'logs');
+  const logDir = path.join(appsDir, appId, 'logs');
   const logFile = path.join(logDir, `${day}.log`);
 
   try {

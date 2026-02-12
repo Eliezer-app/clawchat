@@ -4,7 +4,9 @@ Widgets are interactive HTML/JS components embedded in chat messages via iframes
 
 ## Embedding Widgets
 
-Create `apps/<my-app>/public/index.html`, then embed in a message using an iframe.
+Create `/opt/clawchat/apps/<my-app>/public/index.html`, then embed in a message using an iframe.
+
+Where `<my-app>` is the unique APP_ID: `/^[\w-]+$/`, so \w, \d, -, _ 
 
 Example message:
 
@@ -14,47 +16,17 @@ Here is a nice Earth animation:
 
 ## Static server
 
-The server serves static files from `apps/<my-app>/public/` at `/widget/<my-app>/`.
+The server serves static files from `/opt/clawchat/apps/<my-app>/public/` at `/widget/<my-app>/`.
 
-## State and API
+## API
 
-Widgets support a generic state via REST endpoint `/api/app-state/:app-id``.
-This API is readily available, no initialization is needed.
+State is scoped by app ID (same as <my-app> above). No initialization needed.
 
-State is scoped by app ID - the same as <my-app> above.
+`GET /api/app-state/<app-id>` — Returns `{ state: {...}, version: N }`.
 
-### Read State
+`POST /api/app-state/<app-id>` — JSON body: `{ state: {...} }`. Widgets with the same app ID share state and sync across instances via SSE.
 
-```javascript
-const APP_ID = 'my-app';
-
-const res = await fetch(`/api/app-state/${APP_ID}`);
-const data = await res.json(); // { state: {...}, version: N }
-```
-
-### Write State
-
-```javascript
-await fetch(`/api/app-state/${APP_ID}`, {
-  method: 'POST',
-  headers: { 'Content-Type': 'application/json' },
-  body: JSON.stringify({ state: { tasks } }),
-});
-```
-
-## Debugging
-
-### Logging
-
-```javascript
-fetch('/api/widget-log', {
-  method: 'POST',
-  headers: { 'Content-Type': 'application/json' },
-  body: JSON.stringify({ widgetPath: 'my-app', data: { msg: 'hello' } }),
-}).catch(() => {});
-```
-
-Logs are written to `apps/:app-id/widget-logs/`.
+`POST /api/widget-log/<app-id>` — JSON body is written as-is to `/opt/clawchat/apps/<app-id>/logs/<yyyy-mm-dd>.log`.
 
 ## Auto Features
 
@@ -62,10 +34,6 @@ Logs are written to `apps/:app-id/widget-logs/`.
 - **Injected CSS** — `html, body { height: auto; min-height: 0; overflow: hidden; }` prevents scrollbars and viewport unit issues
 - **Sandbox** — File-based: none (same-origin, full trust). Data URL: `allow-scripts` only
 - **Lazy loading** — Widgets are created when within 500px of the viewport and destroyed when scrolled away
-
-## Shared State
-
-Widgets with the same `APP_ID` share state. Multiple widgets can be views into the same app data. When one widget updates state, the server broadcasts an SSE event so other widgets can re-fetch.
 
 ## Example: Counter (data URL, no state)
 
@@ -91,11 +59,11 @@ Widgets with the same `APP_ID` share state. Multiple widgets can be views into t
 </html>
 ```
 
-Base64-encode and embed as `<iframe src="data:text/html;base64,...">`.
+Base64-encode and embed as <iframe src="data:text/html;base64,...">.
 
 ## Example: File-based Widget with State
 
-`apps/todo/public/index.html`:
+`/opt/clawchat/apps/todo/public/index.html`:
 
 ```html
 <!DOCTYPE html>
@@ -116,24 +84,35 @@ Base64-encode and embed as `<iframe src="data:text/html;base64,...">`.
   <script>
     const APP_ID = 'todo';
     let tasks = [];
+    // only enable logging when debugging, to keep chattiness low
+    const logEnabled = false;
+
+    async function apiDo(method, url, body) {
+      const res = await fetch(url, {
+        method,
+        headers: { 'Content-Type': 'application/json' },
+        body: body !== undefined ? JSON.stringify(body) : undefined,
+      });
+      return res.json();
+    }
+
+    async function log(...args) {
+      if (!logEnabled) return
+      return apiDo('POST', `/api/widget-log/${APP_ID}`, args.length === 1 ? args[0] : args).catch(() => {});
+    }
 
     async function loadState() {
       try {
-        const res = await fetch(`/api/app-state/${APP_ID}`);
-        if (res.ok) {
-          const data = await res.json();
-          tasks = data.state?.tasks || [];
-          render();
-        }
-      } catch {}
+        const data = await apiDo('GET', `/api/app-state/${APP_ID}`);
+        tasks = data.state?.tasks || [];
+        // to prevent logging coming out of order, wait for it
+        await log('loaded', tasks.length, 'tasks');
+        render();
+      } catch (e) { log('loadState error', e.message); }
     }
 
     function saveState() {
-      fetch(`/api/app-state/${APP_ID}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ state: { tasks } }),
-      }).catch(() => {});
+      apiDo('POST', `/api/app-state/${APP_ID}`, { state: { tasks } });
     }
 
     function render() {
@@ -157,7 +136,7 @@ Base64-encode and embed as `<iframe src="data:text/html;base64,...">`.
 </html>
 ```
 
-Embed: `<iframe src="/widget/todo/"></iframe>`
+Embed: <iframe src="/widget/todo/"></iframe>
 
 ## Fullscreen
 
@@ -172,4 +151,6 @@ apps/
       index.html    # Entry point, served at /widget/mywidget/
       style.css     # Optional additional files
       ...
+    logs/
+      2026-01-01.log
 ```

@@ -255,10 +255,11 @@ export default function Main() {
     return <div class="markdown" innerHTML={html} />;
   };
 
-  // Escape iframes not matching allowed src patterns
+  // Escape iframes not matching allowed src patterns — show full tag as visible text
   const ALLOWED_IFRAME_SRC = /src="(\/widget\/[^"]+|data:text\/html[^"]+)"/i;
   const escapeIframes = (text: string): string =>
-    text.replace(/<iframe\b[^>]*>/gi, (tag) => ALLOWED_IFRAME_SRC.test(tag) ? tag : '&lt;iframe');
+    text.replace(/<iframe\b[^>]*>(?:\s*<\/iframe>)?/gi, (tag) =>
+      ALLOWED_IFRAME_SRC.test(tag) ? tag : tag.replace(/</g, '&lt;').replace(/>/g, '&gt;'));
 
   const renderContent = (text: string): JSX.Element[] => {
     // Match code blocks and widget iframes (served or inline data URLs)
