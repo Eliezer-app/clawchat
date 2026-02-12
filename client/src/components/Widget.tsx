@@ -9,6 +9,7 @@ const INJECTED_STYLE = 'html, body { height: auto !important; min-height: 0 !imp
 
 interface WidgetProps {
   src: string;
+  messageId?: string;
 }
 
 export default function Widget(props: WidgetProps) {
@@ -44,6 +45,7 @@ export default function Widget(props: WidgetProps) {
       const style = doc.createElement('style');
       style.textContent = INJECTED_STYLE;
       doc.head.appendChild(style);
+      if (props.messageId) doc.body.dataset.messageid = props.messageId;
       resizeObs = new ResizeObserver(updateHeight);
       resizeObs.observe(doc.body);
       updateHeight();

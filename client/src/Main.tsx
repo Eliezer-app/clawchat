@@ -261,7 +261,7 @@ export default function Main() {
     text.replace(/<iframe\b[^>]*>(?:\s*<\/iframe>)?/gi, (tag) =>
       ALLOWED_IFRAME_SRC.test(tag) ? tag : tag.replace(/</g, '&lt;').replace(/>/g, '&gt;'));
 
-  const renderContent = (text: string): JSX.Element[] => {
+  const renderContent = (text: string, messageId?: string): JSX.Element[] => {
     // Match code blocks and widget iframes (served or inline data URLs)
     const blockRegex = /```(\w*)\n?([\s\S]*?)```|<iframe\s+[^>]*?src="(\/widget\/[^"]+|data:text\/html[^"]+)"[^>]*>(?:\s*<\/iframe>)?/gi;
     const parts: JSX.Element[] = [];
@@ -280,7 +280,7 @@ export default function Main() {
       } else if (match[3]) {
         // Widget iframe — render as component
         const src = match[3];
-        parts.push(<Widget src={src} />);
+        parts.push(<Widget src={src} messageId={messageId} />);
       }
       lastIndex = match.index + match[0].length;
     }

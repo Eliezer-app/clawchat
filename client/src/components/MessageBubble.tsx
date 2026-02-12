@@ -10,7 +10,7 @@ interface MessageBubbleProps {
   message: Message;
   onDelete: (id: string) => void;
   onImageClick: (src: string, filename: string) => void;
-  renderContent: (text: string) => JSX.Element[];
+  renderContent: (text: string, messageId: string) => JSX.Element[];
 }
 
 export default function MessageBubble(props: MessageBubbleProps) {
@@ -41,7 +41,7 @@ export default function MessageBubble(props: MessageBubbleProps) {
         <Show when={widgetSrc()}>
           <button class="open-widget-btn" onClick={handleOpenWidget} title="Open widget in new tab">⧉</button>
         </Show>
-        <Show when={msg.content}>{props.renderContent(msg.content)}</Show>
+        <Show when={msg.content}>{props.renderContent(msg.content, msg.id)}</Show>
         <Show when={msg.attachment}>
           {(att) => (
             <Show
