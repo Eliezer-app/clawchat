@@ -5,6 +5,9 @@ data/
 *.db
 .env
 .env.*
+!.env.mock
+!.env.dev
+!.env.example
 .pnpm-store/
 .DS_Store
 apps/*
