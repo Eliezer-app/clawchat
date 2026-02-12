@@ -176,7 +176,11 @@ export default function Main() {
 
     // Re-fetch messages when app returns from background (iOS kills SSE)
     document.addEventListener('visibilitychange', () => {
-      if (document.visibilityState === 'visible') refreshMessages();
+      if (document.visibilityState === 'visible') {
+        refreshMessages();
+        navigator.clearAppBadge?.();
+        navigator.serviceWorker?.controller?.postMessage('clearBadge');
+      }
     });
 
     // Escape to stop agent

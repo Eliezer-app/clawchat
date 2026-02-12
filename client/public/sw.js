@@ -1,11 +1,19 @@
 // ClawChat Service Worker for Push Notifications
 
+let unreadCount = 0;
+
 self.addEventListener('install', () => {
   self.skipWaiting();
 });
 
 self.addEventListener('activate', (event) => {
   event.waitUntil(clients.claim());
+});
+
+self.addEventListener('message', (event) => {
+  if (event.data === 'clearBadge') {
+    unreadCount = 0;
+  }
 });
 
 self.addEventListener('push', (event) => {
@@ -18,6 +26,8 @@ self.addEventListener('push', (event) => {
     payload = { title: 'New message', body: event.data.text() };
   }
 
+  unreadCount++;
+
   const options = {
     body: payload.body || 'New message',
     icon: '/icon-192.png',
@@ -26,7 +36,17 @@ self.addEventListener('push', (event) => {
     data: payload.data || {},
   };
 
-  event.waitUntil(self.registration.showNotification(payload.title || 'New message', options));
+  event.waitUntil(
+    clients.matchAll({ type: 'window', includeUncontrolled: true }).then((windowClients) => {
+      const isVisible = windowClients.some((c) => c.visibilityState === 'visible');
+      if (isVisible) {
+        unreadCount = 0;
+        return;
+      }
+      return self.registration.showNotification(payload.title || 'New message', options)
+        .then(() => self.navigator.setAppBadge(unreadCount));
+    })
+  );
 });
 
 self.addEventListener('notificationclick', (event) => {
