@@ -104,10 +104,27 @@ export default function Main() {
     };
   }
 
+  /** Splice fetched messages into the existing list, preserving unchanged references */
+  function mergeMessages(prev: Message[], next: Message[]): Message[] {
+    if (!prev.length) return next;
+    const prevMap = new Map(prev.map(m => [m.id, m]));
+    let changed = prev.length !== next.length;
+    const result = next.map(m => {
+      const existing = prevMap.get(m.id);
+      if (existing && existing.content === m.content) return existing;
+      changed = true;
+      return m;
+    });
+    return changed ? result : prev;
+  }
+
   async function refreshMessages() {
     try {
       const res = await fetch('/api/messages');
-      if (res.ok) setMessages(await res.json());
+      if (res.ok) {
+        const next: Message[] = await res.json();
+        setMessages(prev => mergeMessages(prev, next));
+      }
     } catch {}
     connectSSE();
   }
@@ -141,7 +158,8 @@ export default function Main() {
     try {
       const res = await fetch('/api/messages');
       if (res.ok) {
-        setMessages(await res.json());
+        const next: Message[] = await res.json();
+        setMessages(prev => mergeMessages(prev, next));
         if (location.hash) {
           document.getElementById(location.hash.slice(1))?.scrollIntoView({ behavior: 'instant', block: 'start' });
         } else {
