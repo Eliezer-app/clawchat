@@ -26,6 +26,7 @@ export async function sendPushToAll(payload: PushPayload): Promise<void> {
   const subscriptions = getAllPushSubscriptions();
   if (subscriptions.length === 0) return;
 
+  console.log(`[Push] Sending to ${subscriptions.length} subscriptions`);
   const payloadStr = JSON.stringify(payload);
 
   const results = await Promise.allSettled(
@@ -46,6 +47,7 @@ export async function sendPushToAll(payload: PushPayload): Promise<void> {
         const error = err as { statusCode?: number };
         // 400/404/410 means subscription is no longer valid
         if (error.statusCode === 400 || error.statusCode === 404 || error.statusCode === 410) {
+          console.log(`[Push] Removed stale subscription (${error.statusCode})`);
           deletePushSubscription(sub.endpoint);
         } else {
           throw err;

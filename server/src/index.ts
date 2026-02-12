@@ -448,6 +448,7 @@ publicApp.post('/api/push/subscribe', (req, res) => {
   }
 
   createPushSubscription(session.id, endpoint, keys.p256dh, keys.auth);
+  console.log('[Push] Subscribed:', session.id);
   res.json({ ok: true });
 });
 
@@ -465,6 +466,7 @@ publicApp.delete('/api/push/subscribe', (req, res) => {
   }
 
   deletePushSubscription(endpoint);
+  console.log('[Push] Unsubscribed:', endpoint);
   res.json({ ok: true });
 });
 
