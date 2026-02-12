@@ -7,9 +7,11 @@ import qrcode from 'qrcode-terminal';
 import { createInvite } from './db.js';
 
 const BASE_URL = process.env.BASE_URL || 'http://localhost:3102';
-const INVITE_EXPIRY_MS = 5 * 60 * 1000; // 5 minutes
+const INVITE_EXPIRY_MS = 24 * 60 * 60 * 1000; // 24 hours
 
 function formatExpiry(ms: number): string {
+  const hours = Math.floor(ms / 3600000);
+  if (hours >= 1) return `${hours} hour${hours !== 1 ? 's' : ''}`;
   const minutes = Math.floor(ms / 60000);
   return `${minutes} minute${minutes !== 1 ? 's' : ''}`;
 }

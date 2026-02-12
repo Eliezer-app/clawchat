@@ -62,7 +62,7 @@ cd /opt/clawchat
 BASE_URL=https://chat.example.com pnpm invite
 ```
 
-This prints a QR code + URL. Scan with phone or open the link. Invite expires in 5 minutes, one-time use.
+This prints a QR code + URL. Scan with phone or open the link. Invite expires in 24 hours, one-time use.
 
 ### How It Works
 
