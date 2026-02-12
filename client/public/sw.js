@@ -13,6 +13,7 @@ self.addEventListener('activate', (event) => {
 self.addEventListener('message', (event) => {
   if (event.data === 'clearBadge') {
     unreadCount = 0;
+    self.registration.getNotifications().then((n) => n.forEach((n) => n.close()));
   }
 });
 
