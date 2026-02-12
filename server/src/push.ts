@@ -44,8 +44,8 @@ export async function sendPushToAll(payload: PushPayload): Promise<void> {
         );
       } catch (err) {
         const error = err as { statusCode?: number };
-        // 410 Gone or 404 means subscription is no longer valid
-        if (error.statusCode === 410 || error.statusCode === 404) {
+        // 400/404/410 means subscription is no longer valid
+        if (error.statusCode === 400 || error.statusCode === 404 || error.statusCode === 410) {
           deletePushSubscription(sub.endpoint);
         } else {
           throw err;
