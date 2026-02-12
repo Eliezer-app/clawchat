@@ -3,22 +3,33 @@
 <head>
   <meta charset="utf-8">
   <style>
-    body { font-family: system-ui; padding: 20px; background: #1a1a2e; color: #e0e0e0; }
-    h1 { color: #667eea; margin: 0 0 8px; font-size: 18px; }
-    p { margin: 0; color: #999; }
-    button { margin-top: 12px; padding: 8px 16px; background: #667eea; color: white; border: none; border-radius: 6px; cursor: pointer; }
+    body { font-family: system-ui; padding: 24px 28px; background: #1a1a2e; color: #e0e0e0; }
+    button { padding: 12px 24px; background: #667eea; color: white; border: none; border-radius: 8px; cursor: pointer; font-size: 15px; }
     button:hover { background: #5a6fd6; }
-    .counter { font-size: 24px; font-weight: bold; margin: 8px 0; }
+    #result { margin: 20px 0; min-height: 70px; }
+    .city { font-size: 22px; font-weight: bold; margin-bottom: 8px; }
+    .weather { font-size: 36px; margin-bottom: 6px; }
+    .desc { color: #999; font-size: 14px; }
   </style>
 </head>
 <body>
-  <h1>Example Widget</h1>
-  <p>Static page with persisted state</p>
-  <div class="counter" id="count">...</div>
-  <button onclick="increment()">Count</button>
+  <div id="result"></div>
+  <button onclick="go()">Where would you go next?</button>
   <script>
     const APP_ID = 'example';
-    let n = 0;
+
+    const cities = [
+      { name: 'Tokyo', lat: 35.7, lon: 139.7 },
+      { name: 'Paris', lat: 48.9, lon: 2.3 },
+      { name: 'New York', lat: 40.7, lon: -74.0 },
+      { name: 'Sydney', lat: -33.9, lon: 151.2 },
+      { name: 'Cairo', lat: 30.0, lon: 31.2 },
+      { name: 'Rio de Janeiro', lat: -22.9, lon: -43.2 },
+      { name: 'Reykjavik', lat: 64.1, lon: -21.9 },
+      { name: 'Bangkok', lat: 13.8, lon: 100.5 },
+      { name: 'Cape Town', lat: -33.9, lon: 18.4 },
+      { name: 'Moscow', lat: 55.8, lon: 37.6 },
+    ];
 
     async function apiDo(method, url, body) {
       const res = await fetch(url, {
@@ -29,33 +40,33 @@
       return res.json();
     }
 
-    const msgId = () => document.body.dataset.messageid || '?';
-
-    function log(...args) {
-      apiDo('POST', `/api/widget-log/${APP_ID}`, { msgId: msgId(), args }).catch(() => {});
-    }
-
-    async function loadState() {
+    async function go() {
+      const city = cities[Math.floor(Math.random() * cities.length)];
+      document.getElementById('result').innerHTML = '<div class="city">' + city.name + '</div><div class="desc">Loading...</div>';
       try {
-        const data = await apiDo('GET', `/api/app-state/${APP_ID}`);
-        n = data.state?.count || 0;
-        log('loaded', n);
-      } catch (e) { log('loadState error', e.message); }
-      document.getElementById('count').textContent = n;
+        const w = await apiDo('GET', `/widget/example/api/weather?lat=${city.lat}&lon=${city.lon}`);
+        document.getElementById('result').innerHTML =
+          '<div class="city">' + city.name + '</div>' +
+          '<div class="weather">' + w.icon + ' ' + w.temp + '°C</div>' +
+          '<div class="desc">' + w.description + '</div>';
+        apiDo('POST', `/api/app-state/${APP_ID}`, { state: { lastCity: city.name, ...w } });
+      } catch {
+        document.getElementById('result').innerHTML =
+          '<div class="city">' + city.name + '</div>' +
+          '<div class="desc">Could not fetch weather</div>';
+      }
     }
 
-    function saveState() {
-      apiDo('POST', `/api/app-state/${APP_ID}`, { state: { count: n } });
-    }
-
-    function increment() {
-      n++;
-      document.getElementById('count').textContent = n;
-      saveState();
-      log('increment', n);
-    }
-
-    loadState();
+    // Load last result from state
+    apiDo('GET', `/api/app-state/${APP_ID}`).then(data => {
+      const s = data.state;
+      if (s && s.lastCity) {
+        document.getElementById('result').innerHTML =
+          '<div class="city">' + s.lastCity + '</div>' +
+          '<div class="weather">' + s.icon + ' ' + s.temp + '°C</div>' +
+          '<div class="desc">' + s.description + '</div>';
+      }
+    }).catch(() => {});
   </script>
 </body>
 </html>

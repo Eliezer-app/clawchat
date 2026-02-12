@@ -851,15 +851,6 @@ async function loadAppHandlers() {
   }
 }
 
-// SPA catch-all - serve index.html with app name injected
-const indexHtml = fs.readFileSync(path.join(clientDist, 'index.html'), 'utf-8')
-  .replace(/<title>[^<]*<\/title>/, `<title>${appName}</title>`)
-  .replace('</head>', `<script>window.__APP_NAME__=${JSON.stringify(appName)}</script></head>`);
-
-publicApp.get('*', (req, res) => {
-  res.type('html').send(indexHtml);
-});
-
 // ===================
 // Start servers
 // ===================
@@ -868,8 +859,17 @@ async function start() {
   // Initialize push notifications
   initPush(requireEnv);
 
-  // Load widget app handlers before starting servers
+  // Load widget app handlers before SPA catch-all
   await loadAppHandlers();
+
+  // SPA catch-all - serve index.html with app name injected (must be last)
+  const indexHtml = fs.readFileSync(path.join(clientDist, 'index.html'), 'utf-8')
+    .replace(/<title>[^<]*<\/title>/, `<title>${appName}</title>`)
+    .replace('</head>', `<script>window.__APP_NAME__=${JSON.stringify(appName)}</script></head>`);
+
+  publicApp.get('*', (req, res) => {
+    res.type('html').send(indexHtml);
+  });
 
   const agentHost = requireEnv('AGENT_HOST');
   agentApp.listen(Number(agentPort), agentHost, () => {

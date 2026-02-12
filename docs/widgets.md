@@ -142,6 +142,28 @@ Embed: <iframe src="/widget/todo/"></iframe>
 
 The ⧉ button on widget messages opens the widget in a new browser tab.
 
+## Server-side Endpoints
+
+Widgets can have custom server-side routes. Create `apps/<my-app>/index.mts` exporting a default function that receives an Express Router:
+
+```typescript
+import { Router } from 'express';
+
+export default (router: Router) => {
+  router.get('/weather', async (req, res) => {
+    const { lat, lon } = req.query;
+    // ... fetch from external API, query DB, etc.
+    res.json({ temp: 22, description: 'Clear' });
+  });
+};
+```
+
+Routes are mounted at `/widget/<my-app>/api/`. Widget calls `fetch('/widget/myapp/api/weather?lat=...')`.
+
+Handlers are loaded at server startup. After adding or changing `index.mts`, restart the server: `sudo systemctl restart clawchat`
+
+For a complete example with server-side weather API, see `apps/example/`.
+
 ## File Structure
 
 ```
@@ -151,6 +173,7 @@ apps/
       index.html    # Entry point, served at /widget/mywidget/
       style.css     # Optional additional files
       ...
+    index.mts       # Optional server-side routes, mounted at /widget/mywidget/api/
     logs/
       2026-01-01.log
 ```
