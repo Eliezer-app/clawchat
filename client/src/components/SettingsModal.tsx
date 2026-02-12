@@ -1,5 +1,6 @@
 import { createSignal, onMount, Show, For, createEffect } from 'solid-js';
 import { usePushNotifications } from '../hooks/usePushNotifications';
+import LineEditor from './LineEditor';
 
 type Tab = 'notifications' | 'prompts' | 'agent' | 'cron' | 'account';
 
@@ -166,7 +167,6 @@ export default function SettingsModal(props: SettingsModalProps) {
     return `${date} - ${ago}`;
   };
 
-  let linesRef: HTMLDivElement | undefined;
 
   const handlePushToggle = async () => {
     if (state() === 'subscribed') {
@@ -208,39 +208,41 @@ export default function SettingsModal(props: SettingsModalProps) {
           <button class="settings-close" onClick={props.onClose}>×</button>
         </div>
 
-        <div class="settings-tabs">
-          <button
-            class={`settings-tab ${activeTab() === 'notifications' ? 'settings-tab--active' : ''}`}
-            onClick={() => setActiveTab('notifications')}
-          >
-            Notifications
-          </button>
-          <Show when={prompts().length > 0}>
+        <div class="settings-tabs-wrap">
+          <div class="settings-tabs">
             <button
-              class={`settings-tab ${activeTab() === 'prompts' ? 'settings-tab--active' : ''}`}
-              onClick={() => setActiveTab('prompts')}
+              class={`settings-tab ${activeTab() === 'notifications' ? 'settings-tab--active' : ''}`}
+              onClick={() => setActiveTab('notifications')}
             >
-              Prompts
+              Notifications
             </button>
-          </Show>
-          <button
-            class={`settings-tab ${activeTab() === 'agent' ? 'settings-tab--active' : ''}`}
-            onClick={() => setActiveTab('agent')}
-          >
-            Agent
-          </button>
-          <button
-            class={`settings-tab ${activeTab() === 'cron' ? 'settings-tab--active' : ''}`}
-            onClick={() => setActiveTab('cron')}
-          >
-            Schedule
-          </button>
-          <button
-            class={`settings-tab ${activeTab() === 'account' ? 'settings-tab--active' : ''}`}
-            onClick={() => setActiveTab('account')}
-          >
-            Account
-          </button>
+            <Show when={prompts().length > 0}>
+              <button
+                class={`settings-tab ${activeTab() === 'prompts' ? 'settings-tab--active' : ''}`}
+                onClick={() => setActiveTab('prompts')}
+              >
+                Prompts
+              </button>
+            </Show>
+            <button
+              class={`settings-tab ${activeTab() === 'agent' ? 'settings-tab--active' : ''}`}
+              onClick={() => setActiveTab('agent')}
+            >
+              Agent
+            </button>
+            <button
+              class={`settings-tab ${activeTab() === 'cron' ? 'settings-tab--active' : ''}`}
+              onClick={() => setActiveTab('cron')}
+            >
+              Schedule
+            </button>
+            <button
+              class={`settings-tab ${activeTab() === 'account' ? 'settings-tab--active' : ''}`}
+              onClick={() => setActiveTab('account')}
+            >
+              Account
+            </button>
+          </div>
         </div>
 
         <div class="settings-content">
@@ -259,17 +261,19 @@ export default function SettingsModal(props: SettingsModalProps) {
           <Show when={activeTab() === 'prompts'}>
             <div class="settings-section settings-prompts">
               <div class="settings-prompts-header">
-                <div class="settings-prompts-pills">
-                  <For each={prompts()}>
-                    {(prompt) => (
-                      <button
-                        class={`settings-prompts-pill ${selectedPrompt() === prompt.name ? 'settings-prompts-pill--active' : ''}`}
-                        onClick={() => setSelectedPrompt(prompt.name)}
-                      >
-                        {ucFirst(prompt.name)}
-                      </button>
-                    )}
-                  </For>
+                <div class="settings-prompts-pills-wrap">
+                  <div class="settings-prompts-pills">
+                    <For each={prompts()}>
+                      {(prompt) => (
+                        <button
+                          class={`settings-prompts-pill ${selectedPrompt() === prompt.name ? 'settings-prompts-pill--active' : ''}`}
+                          onClick={() => setSelectedPrompt(prompt.name)}
+                        >
+                          {ucFirst(prompt.name)}
+                        </button>
+                      )}
+                    </For>
+                  </div>
                 </div>
                 <button
                   class="settings-prompts-save"
@@ -285,24 +289,12 @@ export default function SettingsModal(props: SettingsModalProps) {
               <Show when={promptError()}>
                 <div class="settings-prompts-error">{promptError()}</div>
               </Show>
-              <div class="settings-prompts-editor">
-                <div class="settings-prompts-lines" ref={linesRef}>
-                  <For each={promptContent().split('\n')}>
-                    {(_, i) => <div class="settings-prompts-line-num">{i() + 1}</div>}
-                  </For>
-                </div>
-                <textarea
-                  class="settings-prompts-textarea"
-                  value={promptContent()}
-                  onInput={(e) => setPromptContent(e.currentTarget.value)}
-                  onScroll={(e) => {
-                    if (linesRef) linesRef.scrollTop = e.currentTarget.scrollTop;
-                  }}
-                  disabled={promptLoading()}
-                  placeholder={promptLoading() ? 'Loading...' : ''}
-                  spellcheck={false}
-                />
-              </div>
+              <LineEditor
+                value={promptContent()}
+                onInput={setPromptContent}
+                disabled={promptLoading()}
+                placeholder={promptLoading() ? 'Loading...' : ''}
+              />
             </div>
           </Show>
 

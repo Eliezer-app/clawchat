@@ -571,7 +571,7 @@ publicApp.get('/manifest.json', (req, res) => {
 });
 
 // Serve frontend static files (protected by auth middleware above)
-publicApp.use(express.static(clientDist));
+publicApp.use(express.static(clientDist, { index: false }));
 
 publicApp.get('/api/events', (req, res) => {
   res.setHeader('Content-Type', 'text/event-stream');

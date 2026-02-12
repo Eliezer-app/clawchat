@@ -1,0 +1,62 @@
+.line-editor {
+  display: flex;
+  position: relative;
+  font-family: 'SF Mono', 'Consolas', 'Monaco', monospace;
+  font-size: 13px;
+  line-height: 20px;
+}
+
+.line-editor-gutter {
+  padding: 12px 0;
+  background: #f5f5f5;
+  border-right: 1px solid #ddd;
+  text-align: right;
+  user-select: none;
+  min-width: 36px;
+  overflow: hidden;
+}
+
+.line-editor-num {
+  padding: 0 8px;
+  color: #999;
+  font-variant-numeric: tabular-nums;
+}
+
+.line-editor-textarea {
+  flex: 1;
+  padding: 12px;
+  border: none;
+  resize: none;
+  outline: none;
+  font: inherit;
+  color: inherit;
+  background: transparent;
+}
+
+.line-editor-textarea::placeholder {
+  color: #999;
+}
+
+.line-editor-mirror {
+  position: absolute;
+  visibility: hidden;
+  pointer-events: none;
+  white-space: pre-wrap;
+  word-break: break-word;
+  overflow-wrap: break-word;
+  font: inherit;
+  padding: 12px;
+  top: 0;
+  left: 0;
+}
+
+@media (prefers-color-scheme: dark) {
+  .line-editor {
+    background: #2a2a2a;
+    color: #e0e0e0;
+  }
+  .line-editor-gutter {
+    background: #1e1e1e;
+    border-right-color: #444;
+  }
+}

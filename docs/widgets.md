@@ -4,29 +4,24 @@ Widgets are interactive HTML/JS components embedded in chat messages via iframes
 
 ## Embedding Widgets
 
-### File-based Widget
+Create `apps/<my-app>/public/index.html`, then embed in a message using an iframe.
 
-Create `apps/<name>/public/index.html`, then embed in a message:
+Example message:
 
-```
-<iframe src="/widget/<name>/"></iframe>
-```
+Here is a nice Earth animation:
 
-The server serves static files from `apps/<name>/public/` at `/widget/<name>/`.
+<iframe src="/widget/earth/"></iframe>
 
-### Inline Widget (data URL)
+## Static server
 
-Embed HTML directly as a base64 data URL:
+The server serves static files from `apps/<my-app>/public/` at `/widget/<my-app>/`.
 
-```
-<iframe src="data:text/html;base64,PCFET0NUWVB..."></iframe>
-```
+## State and API
 
-Inline widgets have no state (opaque origin — no API access). Use for simple, self-contained content.
+Widgets support a generic state via REST endpoint `/api/app-state/:app-id``.
+This API is readily available, no initialization is needed.
 
-## API
-
-Widgets use standard REST calls. State is scoped by app ID.
+State is scoped by app ID - the same as <my-app> above.
 
 ### Read State
 
@@ -47,6 +42,8 @@ await fetch(`/api/app-state/${APP_ID}`, {
 });
 ```
 
+## Debugging
+
 ### Logging
 
 ```javascript
@@ -57,7 +54,7 @@ fetch('/api/widget-log', {
 }).catch(() => {});
 ```
 
-Logs are written to `server/data/widget-logs/`.
+Logs are written to `apps/:app-id/widget-logs/`.
 
 ## Auto Features
 
