@@ -4,11 +4,20 @@
 dev: connect-dev-agent
 
 connect-mock-agent:
-	cp .env.mock .env
-	docker compose down && docker compose up -d
+	$(MAKE) _switch-env ENV_FILE=.env.mock
 
 connect-dev-agent:
-	cp .env.dev .env
+	$(MAKE) _switch-env ENV_FILE=.env.dev
+
+_switch-env:
+	@PK=$$(grep '^VAPID_PUBLIC_KEY=.\+' .env 2>/dev/null | tail -1); \
+	SK=$$(grep '^VAPID_PRIVATE_KEY=.\+' .env 2>/dev/null | tail -1); \
+	SU=$$(grep '^VAPID_SUBJECT=.\+' .env 2>/dev/null | tail -1); \
+	cp $(ENV_FILE) .env; \
+	sed -i '' '/^VAPID_/d' .env; \
+	if [ -n "$$PK" ]; then echo "$$PK" >> .env; fi; \
+	if [ -n "$$SK" ]; then echo "$$SK" >> .env; fi; \
+	if [ -n "$$SU" ]; then echo "$$SU" >> .env; fi
 	docker compose down && docker compose up -d
 
 # Type checking
@@ -63,7 +72,7 @@ push-setup:
 	fi
 
 _push-setup-dev:
-	@if [ -f .env ] && grep -q "^VAPID_PUBLIC_KEY=" .env; then \
+	@if [ -f .env ] && grep -q "^VAPID_PUBLIC_KEY=.\+" .env; then \
 		echo "VAPID keys already exist in .env"; \
 	else \
 		echo "Generating VAPID keys..."; \

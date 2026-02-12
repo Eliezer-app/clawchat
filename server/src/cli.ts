@@ -1,6 +1,7 @@
 #!/usr/bin/env tsx
 
-const AGENT_URL = process.env.AGENT_URL || 'http://127.0.0.1:3100';
+const AGENT_URL = process.env.AGENT_URL;
+if (!AGENT_URL) { console.error('AGENT_URL environment variable is required'); process.exit(1); }
 
 async function sendMessage(content: string) {
   const res = await fetch(`${AGENT_URL}/send`, {

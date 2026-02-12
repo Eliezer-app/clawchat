@@ -1,30 +1,18 @@
 import webpush from 'web-push';
 import { getAllPushSubscriptions, deletePushSubscription, getVisibleSessionIds } from './db.js';
 
-let initialized = false;
+let publicKey: string;
 
-export function initPush(): boolean {
-  const publicKey = process.env.VAPID_PUBLIC_KEY;
-  const privateKey = process.env.VAPID_PRIVATE_KEY;
-  const subject = process.env.VAPID_SUBJECT || 'mailto:admin@localhost';
-
-  if (!publicKey || !privateKey) {
-    console.log('[Push] VAPID keys not configured - push notifications disabled');
-    return false;
-  }
-
+export function initPush(requireEnv: (name: string) => string): void {
+  publicKey = requireEnv('VAPID_PUBLIC_KEY');
+  const privateKey = requireEnv('VAPID_PRIVATE_KEY');
+  const subject = requireEnv('VAPID_SUBJECT');
   webpush.setVapidDetails(subject, publicKey, privateKey);
-  initialized = true;
   console.log('[Push] Web push notifications enabled');
-  return true;
 }
 
-export function getVapidPublicKey(): string | null {
-  return process.env.VAPID_PUBLIC_KEY || null;
-}
-
-export function isPushEnabled(): boolean {
-  return initialized;
+export function getVapidPublicKey(): string {
+  return publicKey;
 }
 
 interface PushPayload {
@@ -35,8 +23,6 @@ interface PushPayload {
 }
 
 export async function sendPushToAll(payload: PushPayload): Promise<void> {
-  if (!initialized) return;
-
   const subscriptions = getAllPushSubscriptions();
   if (subscriptions.length === 0) return;
 

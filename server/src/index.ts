@@ -7,7 +7,7 @@ import path from 'path';
 import fs from 'fs';
 import cookieParser from 'cookie-parser';
 import { getMessages, getMessage, addMessage, deleteMessage, updateMessage, getAppState, setAppState, getSessionByToken, createSession, deleteSession, getInvite, markInviteUsed, createPushSubscription, deletePushSubscription, setSessionVisibility, updateSessionActivity } from './db.js';
-import { initPush, getVapidPublicKey, sendPushToAll, isPushEnabled } from './push.js';
+import { initPush, getVapidPublicKey, sendPushToAll } from './push.js';
 import type { Message, Attachment } from '@clawchat/shared';
 import { SSEEventType } from '@clawchat/shared';
 
@@ -22,8 +22,9 @@ const publicPort = requireEnv('PUBLIC_PORT');
 const appsDir = requireEnv('APPS_DIR');
 const clientDist = requireEnv('CLIENT_DIST');
 const agentUrl = requireEnv('AGENT_URL');
-const promptsDir = process.env.PROMPTS_DIR || '';
-const chatPublicDir = process.env.CHAT_PUBLIC_DIR || '';
+const promptsDir = requireEnv('PROMPTS_DIR');
+const chatPublicDir = requireEnv('CHAT_PUBLIC_DIR');
+const appName = requireEnv('APP_NAME');
 
 // ===================
 // Agent Notification
@@ -124,10 +125,10 @@ function createMessage(role: Message['role'], content: string, opts?: { conversa
   broadcast({ type: 'message', message });
 
   // Send push notification for regular agent messages only
-  if (role === 'agent' && (opts?.type || 'message') === 'message' && isPushEnabled()) {
+  if (role === 'agent' && (opts?.type || 'message') === 'message') {
     const preview = content.length > 100 ? content.slice(0, 100) + '...' : content;
     sendPushToAll({
-      title: 'ClawChat',
+      title: appName,
       body: preview,
       tag: 'clawchat-message',
       data: { messageId: message.id },
@@ -423,12 +424,7 @@ publicApp.put('/api/agent/cron/:name/enabled', async (req, res) => {
 
 // Get VAPID public key (public - needed before auth for service worker)
 publicApp.get('/api/push/vapid-public-key', (req, res) => {
-  const key = getVapidPublicKey();
-  if (!key) {
-    res.status(503).json({ error: 'Push notifications not configured' });
-    return;
-  }
-  res.json({ publicKey: key });
+  res.json({ publicKey: getVapidPublicKey() });
 });
 
 // Subscribe to push notifications (requires auth)
@@ -519,7 +515,7 @@ publicApp.get('/invite', (req, res) => {
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Join ClawChat</title>
+  <title>Join ${appName}</title>
   <style>
     body { font-family: system-ui, sans-serif; display: flex; align-items: center; justify-content: center; min-height: 100vh; margin: 0; background: #0a0a0a; color: #fff; }
     .container { text-align: center; padding: 2rem; max-width: 400px; }
@@ -535,7 +531,7 @@ publicApp.get('/invite', (req, res) => {
 </head>
 <body>
   <div class="container">
-    <h1>ClawChat</h1>
+    <h1>${appName}</h1>
     <p>This chat is invite-only.<br>Enter your invite token below.</p>
     <form action="/invite" method="get">
       <input type="text" name="token" placeholder="Invite token" required autofocus />
@@ -564,6 +560,14 @@ publicApp.use('/widget/:app', (req: Request, res: Response, next: NextFunction) 
     req.url = saved;
     next();
   });
+});
+
+// Serve manifest with configured app name
+publicApp.get('/manifest.json', (req, res) => {
+  const manifest = JSON.parse(fs.readFileSync(path.join(clientDist, 'manifest.json'), 'utf-8'));
+  manifest.name = appName;
+  manifest.short_name = appName;
+  res.json(manifest);
 });
 
 // Serve frontend static files (protected by auth middleware above)
@@ -854,9 +858,13 @@ async function loadAppHandlers() {
   }
 }
 
-// SPA catch-all - serve index.html for client-side routing
+// SPA catch-all - serve index.html with app name injected
+const indexHtml = fs.readFileSync(path.join(clientDist, 'index.html'), 'utf-8')
+  .replace(/<title>[^<]*<\/title>/, `<title>${appName}</title>`)
+  .replace('</head>', `<script>window.__APP_NAME__=${JSON.stringify(appName)}</script></head>`);
+
 publicApp.get('*', (req, res) => {
-  res.sendFile(path.join(clientDist, 'index.html'));
+  res.type('html').send(indexHtml);
 });
 
 // ===================
@@ -865,12 +873,12 @@ publicApp.get('*', (req, res) => {
 
 async function start() {
   // Initialize push notifications
-  initPush();
+  initPush(requireEnv);
 
   // Load widget app handlers before starting servers
   await loadAppHandlers();
 
-  const agentHost = process.env.AGENT_HOST || '127.0.0.1';
+  const agentHost = requireEnv('AGENT_HOST');
   agentApp.listen(Number(agentPort), agentHost, () => {
     console.log(`Agent API running on ${agentHost}:${agentPort}`);
   });

@@ -62,7 +62,7 @@ export function AuthLocked() {
       }}>
         <div style={{ 'font-size': '64px', 'margin-bottom': '20px' }}>🔒</div>
         <h1 style={{ 'font-size': '24px', 'margin-bottom': '12px', 'font-weight': '600' }}>
-          ClawChat
+          {(window as any).__APP_NAME__}
         </h1>
         <p style={{ 'font-size': '16px', opacity: 0.9, 'line-height': '1.5', 'margin-bottom': '24px' }}>
           This chat is invite-only.<br />

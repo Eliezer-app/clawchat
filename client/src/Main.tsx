@@ -160,6 +160,11 @@ export default function Main() {
     document.addEventListener('visibilitychange', () => {
       if (document.visibilityState === 'visible') refreshMessages();
     });
+
+    // Escape to stop agent
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && agentTyping()) stopAgent();
+    });
   });
 
   const handleSend = async (content: string, file: File | null) => {
@@ -187,7 +192,11 @@ export default function Main() {
     await Promise.all(ids.map(id => fetch(`/api/messages/${id}`, { method: 'DELETE' })));
   };
 
-  const stopAgent = () => { fetch('/api/stop', { method: 'POST' }); };
+  const stopAgent = () => {
+    fetch('/api/stop', { method: 'POST' });
+    setToast('Stopped');
+    setTimeout(() => setToast(null), 2000);
+  };
 
   const isInternal = (m: Message) => m.role === 'agent' && m.type && m.type !== 'message';
 
@@ -278,7 +287,7 @@ export default function Main() {
         <>
           <div class="app">
             <header class={`header ${agentConnected() ? '' : 'agent-offline'}`}>
-              <a href="/" class="header-title" onClick={(e) => { if (!e.metaKey && !e.ctrlKey) { e.preventDefault(); scrollToBottom(); } }}>ClawChat</a>
+              <a href="/" class="header-title" onClick={(e) => { if (!e.metaKey && !e.ctrlKey) { e.preventDefault(); scrollToBottom(); } }}>{(window as any).__APP_NAME__}</a>
               <button class="settings-btn" onClick={() => { refreshMessages(); scrollToBottom(); }} title="Refresh">↻</button>
               <button class="settings-btn" onClick={() => setShowSettings(true)} title="Settings">⚙</button>
             </header>
@@ -363,6 +372,7 @@ export default function Main() {
                     <span class="dot"></span>
                     <span class="dot"></span>
                     <span class="dot"></span>
+                    <button class="typing-stop" onClick={stopAgent}>Stop</button>
                   </div>
                 </div>
               </Show>

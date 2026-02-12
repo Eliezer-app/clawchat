@@ -15,7 +15,7 @@ self.addEventListener('push', (event) => {
   try {
     payload = event.data.json();
   } catch {
-    payload = { title: 'ClawChat', body: event.data.text() };
+    payload = { title: 'New message', body: event.data.text() };
   }
 
   const options = {
@@ -26,7 +26,7 @@ self.addEventListener('push', (event) => {
     data: payload.data || {},
   };
 
-  event.waitUntil(self.registration.showNotification(payload.title || 'ClawChat', options));
+  event.waitUntil(self.registration.showNotification(payload.title || 'New message', options));
 });
 
 self.addEventListener('notificationclick', (event) => {

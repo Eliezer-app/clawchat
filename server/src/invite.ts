@@ -6,7 +6,14 @@ dotenv.config({ path: '../.env' });
 import qrcode from 'qrcode-terminal';
 import { createInvite } from './db.js';
 
-const BASE_URL = process.env.BASE_URL || 'http://localhost:3102';
+function requireEnv(name: string): string {
+  const value = process.env[name];
+  if (!value) throw new Error(`${name} environment variable is required`);
+  return value;
+}
+
+const BASE_URL = requireEnv('BASE_URL');
+const APP_NAME = requireEnv('APP_NAME');
 const INVITE_EXPIRY_MS = 24 * 60 * 60 * 1000; // 24 hours
 
 function formatExpiry(ms: number): string {
@@ -20,7 +27,7 @@ async function main() {
   const invite = createInvite(INVITE_EXPIRY_MS);
   const inviteUrl = `${BASE_URL}/invite?token=${invite.token}`;
 
-  console.log('\n🔑 ClawChat Invite\n');
+  console.log(`\n🔑 ${APP_NAME} Invite\n`);
 
   qrcode.generate(inviteUrl, { small: true }, (qr) => {
     console.log(qr);

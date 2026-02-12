@@ -81,7 +81,7 @@ ssl:
 	fi
 
 push-setup:
-	@if [ -f $(APP_DIR)/.env ] && grep -q "^VAPID_PUBLIC_KEY=" $(APP_DIR)/.env; then \
+	@if [ -f $(APP_DIR)/.env ] && grep -q "^VAPID_PUBLIC_KEY=.\+" $(APP_DIR)/.env; then \
 		echo "VAPID keys already exist in .env"; \
 	else \
 		echo "Generating VAPID keys..."; \

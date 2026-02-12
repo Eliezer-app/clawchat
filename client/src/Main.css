@@ -56,8 +56,25 @@ body {
 /* Typing indicator */
 .typing-indicator {
   display: flex;
+  align-items: center;
   gap: 4px;
   padding: 16px 20px !important;
+}
+
+.typing-stop {
+  background: none;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  color: rgba(255, 255, 255, 0.3);
+  cursor: pointer;
+  font-size: 0.7rem;
+  padding: 2px 10px;
+  border-radius: 4px;
+  margin-left: 12px;
+}
+
+.typing-stop:hover {
+  color: rgba(255, 255, 255, 0.6);
+  border-color: rgba(255, 255, 255, 0.3);
 }
 
 .typing-indicator .dot {
