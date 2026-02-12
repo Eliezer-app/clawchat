@@ -63,18 +63,17 @@ body {
 
 .typing-stop {
   background: none;
-  border: 1px solid rgba(255, 255, 255, 0.15);
-  color: rgba(255, 255, 255, 0.3);
+  border: 1px solid currentcolor;
   cursor: pointer;
   font-size: 0.7rem;
   padding: 2px 10px;
   border-radius: 4px;
   margin-left: 12px;
+  opacity: 0.3;
 }
 
 .typing-stop:hover {
-  color: rgba(255, 255, 255, 0.6);
-  border-color: rgba(255, 255, 255, 0.3);
+  opacity: 0.6;
 }
 
 .typing-indicator .dot {

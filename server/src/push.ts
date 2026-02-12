@@ -26,13 +26,6 @@ export async function sendPushToAll(payload: PushPayload): Promise<void> {
   const subscriptions = getAllPushSubscriptions();
   if (subscriptions.length === 0) return;
 
-  // If any device is viewing chat, skip all notifications
-  const visibleSessionIds = getVisibleSessionIds();
-  if (visibleSessionIds.length > 0) {
-    console.log('[Push] User viewing chat on another device, skipping notifications');
-    return;
-  }
-
   const payloadStr = JSON.stringify(payload);
 
   const results = await Promise.allSettled(
@@ -61,8 +54,9 @@ export async function sendPushToAll(payload: PushPayload): Promise<void> {
     })
   );
 
-  const failed = results.filter((r) => r.status === 'rejected').length;
-  if (failed > 0) {
-    console.log(`[Push] Failed to send to ${failed}/${subscriptions.length} subscriptions`);
+  const failed = results.filter((r) => r.status === 'rejected');
+  for (const r of failed) {
+    const err = (r as PromiseRejectedResult).reason;
+    console.log(`[Push] Error: ${err.statusCode || 'unknown'} ${err.body || err.message}`);
   }
 }
