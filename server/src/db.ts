@@ -306,6 +306,8 @@ export function createPushSubscription(sessionId: string, endpoint: string, p256
 }
 
 export function getAllPushSubscriptions(): PushSubscription[] {
+  // Only return subscriptions with valid sessions, clean up orphans
+  db().prepare('DELETE FROM push_subscriptions WHERE sessionId NOT IN (SELECT id FROM sessions)').run();
   return db().prepare('SELECT * FROM push_subscriptions').all() as PushSubscription[];
 }
 
