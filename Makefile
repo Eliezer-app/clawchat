@@ -56,6 +56,13 @@ clean:
 
 # Setup push notifications (generate VAPID keys and add to .env)
 push-setup:
+	@if systemctl is-enabled clawchat >/dev/null 2>&1; then \
+		$(MAKE) -C deploy push-setup; \
+	else \
+		$(MAKE) _push-setup-dev; \
+	fi
+
+_push-setup-dev:
 	@if [ -f .env ] && grep -q "^VAPID_PUBLIC_KEY=" .env; then \
 		echo "VAPID keys already exist in .env"; \
 	else \

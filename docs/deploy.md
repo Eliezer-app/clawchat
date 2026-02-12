@@ -23,11 +23,22 @@ Pulls latest code, rebuilds, restarts the service.
 ## Push Notifications
 
 ```bash
-cd /opt/clawchat/deploy
 make push-setup
 ```
 
-Generates VAPID keys, adds them to `.env`, restarts the service.
+Generates VAPID keys, adds them to `.env`, restarts the service. On prod, sets `VAPID_SUBJECT` to the `BASE_URL` from `.env` (e.g. `https://chat.example.com`). On dev, defaults to `mailto:admin@localhost`.
+
+### iOS Requirements
+
+Push notifications work on iOS 16.4+ in both Safari and Chrome (all iOS browsers use WebKit). The user must add the app to their home screen first.
+
+Key requirements from [Apple's documentation](https://developer.apple.com/documentation/usernotifications/sending-web-push-notifications-in-web-apps-and-browsers):
+
+- **VAPID subject must be valid** — `mailto:admin@localhost` will be silently rejected by Apple's push service. Use a real `https://` URL or `mailto:` address.
+- **Permission must be requested immediately from user gesture** — any async work (service worker registration, fetch) before `Notification.requestPermission()` causes iOS to lose the gesture context and silently refuse.
+- **Notifications must be shown immediately** — Safari revokes push permission if the service worker receives a push but doesn't call `showNotification()` right away.
+- **Urgency header** — set to `high` for immediate delivery, otherwise APNs may delay for battery optimization.
+- **Payload limit** — 4 KB max.
 
 ## Operations
 

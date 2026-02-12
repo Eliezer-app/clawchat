@@ -93,7 +93,9 @@ push-setup:
 		echo "# Push notification VAPID keys" >> $(APP_DIR)/.env; \
 		echo "VAPID_PUBLIC_KEY=$$PUBLIC" >> $(APP_DIR)/.env; \
 		echo "VAPID_PRIVATE_KEY=$$PRIVATE" >> $(APP_DIR)/.env; \
-		echo "VAPID_SUBJECT=mailto:admin@localhost" >> $(APP_DIR)/.env; \
+		SUBJECT=$$(grep '^BASE_URL=' $(APP_DIR)/.env 2>/dev/null | cut -d= -f2); \
+		if [ -z "$$SUBJECT" ]; then SUBJECT="mailto:admin@localhost"; fi; \
+		echo "VAPID_SUBJECT=$$SUBJECT" >> $(APP_DIR)/.env; \
 		echo "VAPID keys added to .env"; \
 		echo "Restarting server..."; \
 		sudo systemctl restart clawchat; \
