@@ -20,8 +20,8 @@ self.addEventListener('push', (event) => {
 
   const options = {
     body: payload.body || 'New message',
-    icon: '/icon.svg',
-    badge: '/icon.svg',
+    icon: '/icon-192.png',
+    badge: '/icon-192.png',
     tag: payload.tag || 'clawchat-message',
     renotify: true,
     requireInteraction: true,
