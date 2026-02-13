@@ -6,7 +6,7 @@ import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
 import cookieParser from 'cookie-parser';
-import { getMessages, getMessage, addMessage, deleteMessage, updateMessage, getAppState, setAppState, getSessionByToken, createSession, deleteSession, getInvite, markInviteUsed, createPushSubscription, deletePushSubscription, setSessionVisibility, updateSessionActivity } from './db.js';
+import { getMessages, getMessage, addMessage, deleteMessage, deleteMessagesFrom, updateMessage, getAppState, setAppState, getSessionByToken, createSession, deleteSession, getInvite, markInviteUsed, createPushSubscription, deletePushSubscription, setSessionVisibility, updateSessionActivity } from './db.js';
 import { initPush, getVapidPublicKey, sendPushToAll } from './push.js';
 import type { Message, Attachment } from '@clawchat/shared';
 import { SSEEventType } from '@clawchat/shared';
@@ -705,6 +705,30 @@ publicApp.post('/api/stop', async (req, res) => {
   }
 });
 
+	// POST /api/forget/from — Delete all messages from a given message onwards and notify agent.
+	//   Request body:
+	//     messageId  string — message ID to delete from (inclusive)
+	//   Response: { ok: true, deleted: number }
+publicApp.post('/api/forget/from', async (req, res) => {
+  const { messageId } = req.body;
+  if (!messageId) { res.status(400).json({ error: 'messageId required' }); return; }
+  const ids = deleteMessagesFrom(messageId);
+  if (!ids.length) { res.status(404).json({ error: 'Message not found' }); return; }
+  for (const id of ids) broadcast({ type: 'delete', id });
+  try {
+    const r = await fetch(`${agentUrl}/forget/from`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ messageId }),
+      signal: AbortSignal.timeout(5000),
+    });
+    console.log(`[Forget] Agent responded: ${r.status}`);
+  } catch (err) {
+    console.log(`[Forget] Agent unreachable: ${(err as Error).message}`);
+  }
+  res.json({ ok: true, deleted: ids.length });
+});
+
 	// DELETE /api/messages/:id — Delete a message.
 	//   Response: { ok: true } or 404
 publicApp.delete('/api/messages/:id', (req, res) => {
@@ -882,43 +906,7 @@ publicApp.post('/api/widget-log/:appId', (req, res) => {
 });
 
 // ===================
-// Load app server-side handlers
-// ===================
-
-async function loadAppHandlers() {
-  const { build } = await import('esbuild');
-  let entries: fs.Dirent[];
-  try {
-    entries = fs.readdirSync(appsDir, { withFileTypes: true });
-  } catch {
-    return;
-  }
-
-  for (const entry of entries) {
-    if (!entry.isDirectory()) continue;
-    const handlerPath = path.join(appsDir, entry.name, 'index.mts');
-    if (!fs.existsSync(handlerPath)) continue;
-
-    try {
-      const result = await build({
-        entryPoints: [handlerPath],
-        bundle: true,
-        platform: 'node',
-        format: 'esm',
-        write: false,
-      });
-      const tmpFile = path.join(appsDir, entry.name, '.handler.mjs');
-      fs.writeFileSync(tmpFile, result.outputFiles![0].text);
-      const handler = await import(tmpFile);
-      const router = express.Router();
-      handler.default(router);
-      publicApp.use(`/widget/${entry.name}/api`, router);
-      console.log(`[Widget] Loaded handler: ${entry.name}`);
-    } catch (err) {
-      console.error(`[Widget] Failed to load handler for ${entry.name}:`, err);
-    }
-  }
-}
+// TODO: App server-side handlers disabled — will be wired as separate service
 
 // ===================
 // Start servers
@@ -927,9 +915,6 @@ async function loadAppHandlers() {
 async function start() {
   // Initialize push notifications
   initPush(requireEnv);
-
-  // Load widget app handlers before SPA catch-all
-  await loadAppHandlers();
 
   // SPA catch-all - serve index.html with app name injected (must be last)
   const indexHtml = fs.readFileSync(path.join(clientDist, 'index.html'), 'utf-8')

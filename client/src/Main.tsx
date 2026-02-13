@@ -327,7 +327,7 @@ export default function Main() {
         <>
           <div class="app">
             <header class={`header ${agentConnected() ? '' : 'agent-offline'}`}>
-              <a href="/" class="header-title" onClick={(e) => { if (!e.metaKey && !e.ctrlKey) { e.preventDefault(); scrollToBottom(); } }}>{(window as any).__APP_NAME__}</a>
+              <a href="/" class="header-title" onClick={(e) => { if (!e.metaKey && !e.ctrlKey) { e.preventDefault(); history.replaceState(null, '', '/'); scrollToBottom(); } }}>{(window as any).__APP_NAME__}</a>
               <button class="settings-btn" onClick={() => { refreshMessages(); scrollToBottom(); }} title="Refresh">↻</button>
               <button class="settings-btn" onClick={() => setShowSettings(true)} title="Settings">⚙</button>
             </header>

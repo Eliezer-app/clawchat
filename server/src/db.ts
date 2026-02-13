@@ -131,6 +131,15 @@ export function deleteMessage(id: string): boolean {
   return result.changes > 0;
 }
 
+export function deleteMessagesFrom(id: string): string[] {
+  const msg = db().prepare('SELECT createdAt FROM messages WHERE id = ?').get(id) as { createdAt: string } | undefined;
+  if (!msg) return [];
+  const rows = db().prepare('SELECT id FROM messages WHERE createdAt >= ?').all(msg.createdAt) as { id: string }[];
+  const ids = rows.map(r => r.id);
+  if (ids.length) db().prepare(`DELETE FROM messages WHERE createdAt >= ?`).run(msg.createdAt);
+  return ids;
+}
+
 export function updateMessage(id: string, content: string): Message | null {
   const stmt = db().prepare('UPDATE messages SET content = ? WHERE id = ?');
   const result = stmt.run(content, id);

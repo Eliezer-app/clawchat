@@ -2,7 +2,7 @@ import { createSignal, onMount, Show, For, createEffect } from 'solid-js';
 import { usePushNotifications } from '../hooks/usePushNotifications';
 import LineEditor from './LineEditor';
 
-type Tab = 'notifications' | 'prompts' | 'agent' | 'cron' | 'account';
+type Tab = 'notifications' | 'prompts' | 'agent' | 'cron' | 'forget' | 'account';
 
 interface SettingsModalProps {
   onClose: () => void;
@@ -237,6 +237,12 @@ export default function SettingsModal(props: SettingsModalProps) {
               Schedule
             </button>
             <button
+              class={`settings-tab ${activeTab() === 'forget' ? 'settings-tab--active' : ''}`}
+              onClick={() => setActiveTab('forget')}
+            >
+              Forget
+            </button>
+            <button
               class={`settings-tab ${activeTab() === 'account' ? 'settings-tab--active' : ''}`}
               onClick={() => setActiveTab('account')}
             >
@@ -458,6 +464,59 @@ export default function SettingsModal(props: SettingsModalProps) {
                 <span class="settings-row-desc">No crons configured</span>
               </Show>
             </div>
+          </Show>
+
+          <Show when={activeTab() === 'forget'}>
+            {(() => {
+              const [forgetId, setForgetId] = createSignal('');
+              const [forgetStatus, setForgetStatus] = createSignal('');
+              const parseMessageId = (input: string): string => {
+                const hashMatch = input.match(/#msg-([a-f0-9-]+)/i);
+                if (hashMatch) return hashMatch[1];
+                return input;
+              };
+              const handleInput = (value: string) => {
+                setForgetId(parseMessageId(value.trim()));
+              };
+              const handleForget = async () => {
+                const id = forgetId().trim();
+                if (!id) return;
+                if (!confirm(`Delete all messages from ${id} onwards?`)) return;
+                setForgetStatus('Deleting...');
+                try {
+                  const res = await fetch('/api/forget/from', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ messageId: id }),
+                  });
+                  const data = await res.json();
+                  if (res.ok) {
+                    setForgetStatus(`Deleted ${data.deleted} messages`);
+                    setForgetId('');
+                  } else {
+                    setForgetStatus(data.error || 'Failed');
+                  }
+                } catch {
+                  setForgetStatus('Request failed');
+                }
+              };
+              return (
+                <div class="settings-section forget-section">
+                  <p class="settings-row-desc">Delete all messages from a given point onwards. Paste a message link or ID. Also tells the agent to forget.</p>
+                  <div class="settings-row">
+                    <input
+                      type="text"
+                      class="forget-input"
+                      placeholder="Message ID or link"
+                      value={forgetId()}
+                      onInput={(e) => handleInput(e.currentTarget.value)}
+                    />
+                    <button class="settings-prompts-save" disabled={!forgetId().trim()} onClick={handleForget}>Forget</button>
+                  </div>
+                  <Show when={forgetStatus()}><p class="settings-row-desc">{forgetStatus()}</p></Show>
+                </div>
+              );
+            })()}
           </Show>
 
           <Show when={activeTab() === 'account'}>

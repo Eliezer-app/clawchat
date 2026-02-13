@@ -604,6 +604,31 @@ body {
   border-top: 1px solid #ddd;
 }
 
+.forget-input {
+  flex: 1;
+  padding: 8px 12px;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  font-size: 14px;
+  background: inherit;
+  color: inherit;
+  font-family: inherit;
+  outline: none;
+}
+
+.forget-input:focus {
+  border-color: #667eea;
+}
+
+.forget-section .settings-row-desc {
+  margin-bottom: 16px;
+}
+
+.forget-section .settings-row {
+  border-bottom: none;
+  gap: 12px;
+}
+
 .logout-btn {
   width: 100%;
   padding: 14px;
@@ -1514,6 +1539,9 @@ span + .widget-container {
   }
   .settings-prompts > .line-editor {
     border-top-color: #444;
+  }
+  .forget-input {
+    border-color: #444;
   }
   .settings-prompts-pill:not(.settings-prompts-pill--active) {
     background: #333;

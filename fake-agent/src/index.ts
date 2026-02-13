@@ -94,6 +94,11 @@ app.get('/info/state', (req, res) => {
   res.json({ state: agentState });
 });
 
+app.post('/forget/from', (req, res) => {
+  console.log(`[Agent] Forget from: ${req.body.messageId}`);
+  res.json({ ok: true });
+});
+
 // Error handler - return JSON instead of HTML
 app.use((err: Error, req: express.Request, res: express.Response, next: express.NextFunction) => {
   console.error('[Agent] Error:', err.message);
