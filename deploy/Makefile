@@ -7,11 +7,10 @@ setup: require-domain install-node install-deps build install-service install-ng
 	@echo ""
 	@echo "Setup complete. To enable push notifications, run: make push-setup"
 
+DOMAIN ?= $(shell grep '^BASE_URL=' $(APP_DIR)/.env 2>/dev/null | sed 's|BASE_URL=https://||')
+
 require-domain:
-ifndef DOMAIN
-	$(eval DOMAIN := $(shell grep '^BASE_URL=' $(APP_DIR)/.env 2>/dev/null | sed 's|BASE_URL=https://||'))
-endif
-ifndef DOMAIN
+ifeq ($(DOMAIN),)
 	$(error DOMAIN is required. Usage: make setup DOMAIN=chat.example.com)
 endif
 
