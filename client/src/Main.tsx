@@ -275,16 +275,12 @@ export default function Main() {
     setShowSettings(false);
   };
 
+  const escapeHtml = (text: string) => text.replace(/</g, '&lt;').replace(/>/g, '&gt;');
+
   const renderMarkdown = (text: string) => {
-    const html = marked.parse(text, { async: false }) as string;
+    const html = marked.parse(escapeHtml(text), { async: false }) as string;
     return <div class="markdown" innerHTML={html} />;
   };
-
-  // Escape iframes not matching allowed src patterns — show full tag as visible text
-  const ALLOWED_IFRAME_SRC = /src="(\/widget\/[^"]+|data:text\/html[^"]+)"/i;
-  const escapeIframes = (text: string): string =>
-    text.replace(/<iframe\b[^>]*>(?:\s*<\/iframe>)?/gi, (tag) =>
-      ALLOWED_IFRAME_SRC.test(tag) ? tag : tag.replace(/</g, '&lt;').replace(/>/g, '&gt;'));
 
   const renderContent = (text: string, messageId?: string): JSX.Element[] => {
     // Match code blocks and widget iframes (served or inline data URLs)
@@ -295,7 +291,7 @@ export default function Main() {
 
     while ((match = blockRegex.exec(text)) !== null) {
       if (match.index > lastIndex) {
-        parts.push(renderMarkdown(escapeIframes(text.slice(lastIndex, match.index))));
+        parts.push(renderMarkdown(text.slice(lastIndex, match.index)));
       }
       if (match[1] !== undefined || match[2] !== undefined) {
         // Code block
@@ -311,7 +307,7 @@ export default function Main() {
     }
 
     if (lastIndex < text.length) {
-      parts.push(renderMarkdown(escapeIframes(text.slice(lastIndex))));
+      parts.push(renderMarkdown(text.slice(lastIndex)));
     }
 
     return parts;

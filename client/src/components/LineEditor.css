@@ -31,6 +31,8 @@
   font: inherit;
   color: inherit;
   background: transparent;
+  field-sizing: content;
+  min-height: 200px;
 }
 
 .line-editor-textarea::placeholder {
