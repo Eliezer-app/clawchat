@@ -1431,6 +1431,16 @@ span + .widget-container {
   .time {
     color: #666;
   }
+  .typing-stop {
+    background: rgba(255, 255, 255, 0.1);
+    border-color: rgba(255, 255, 255, 0.3);
+    color: rgba(255, 255, 255, 0.7);
+    opacity: 1;
+  }
+  .typing-stop:hover {
+    background: rgba(255, 255, 255, 0.15);
+    opacity: 1;
+  }
   .recording-indicator {
     background: #3f1e1e;
     color: #fca5a5;
