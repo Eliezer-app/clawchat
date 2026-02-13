@@ -132,9 +132,7 @@ export default function Main() {
         const data = await res.json();
         setAgentState(data.state || 'idle');
       }
-    } catch {
-      setAgentState('idle');
-    }
+    } catch {}
   }
 
   async function refreshMessages() {
@@ -200,6 +198,7 @@ export default function Main() {
       if (document.visibilityState === 'visible') {
         refreshMessages();
         pollAgentState();
+        setTimeout(pollAgentState, 1000);
         navigator.clearAppBadge?.();
         navigator.serviceWorker?.controller?.postMessage('clearBadge');
       }
