@@ -77,15 +77,17 @@ install-service:
 
 install-nginx:
 	sudo apt-get install -y nginx
-	@if [ ! -f /etc/nginx/sites-available/clawchat ]; then \
-		sed 's/DOMAIN/$(DOMAIN)/g' $(APP_DIR)/deploy/nginx.conf | sudo tee /etc/nginx/sites-available/clawchat >/dev/null; \
-		sudo ln -sf /etc/nginx/sites-available/clawchat /etc/nginx/sites-enabled/; \
-	fi
+	sed 's/DOMAIN/$(DOMAIN)/g' $(APP_DIR)/deploy/nginx.conf | sudo tee /etc/nginx/sites-available/clawchat >/dev/null
+	sudo ln -sf /etc/nginx/sites-available/clawchat /etc/nginx/sites-enabled/
 	sudo nginx -t && sudo systemctl reload nginx
 
 ssl:
 	sudo apt-get install -y certbot python3-certbot-nginx
-	sudo certbot --nginx -d $(DOMAIN)
+	@if sudo certbot certificates 2>/dev/null | grep -q "$(DOMAIN)"; then \
+		sudo certbot install --nginx -d $(DOMAIN); \
+	else \
+		sudo certbot --nginx -d $(DOMAIN); \
+	fi
 
 push-setup:
 	@if [ -f $(APP_DIR)/.env ] && grep -q "^VAPID_PUBLIC_KEY=.\+" $(APP_DIR)/.env; then \
