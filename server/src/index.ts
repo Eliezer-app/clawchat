@@ -150,19 +150,49 @@ agentApp.use(express.json());
 	//     content         string  — message content (text or JSON for typed messages)
 	//     type            string? — message type: "thought", "tool_call", "tool_result" (omit for regular message)
 	//     name            string? — tool name (for tool_call/tool_result)
+	//     attachment      object? — file attachment (file must exist in CHAT_PUBLIC_DIR)
+	//       filename      string  — filename in chat-public
 	//   Response:
 	//     messageId       string  — assigned message ID
 agentApp.post('/send', (req, res) => {
-  const { conversationId, content, type, name } = req.body;
+  const { conversationId, content, type, name, attachment: attachmentInput } = req.body;
   if (!content || typeof content !== 'string' || !content.trim()) {
     res.status(400).json({ error: 'Content required' });
     return;
   }
+
+  let attachment: Attachment | undefined;
+  if (attachmentInput?.filename) {
+    const filePath = path.join(chatPublicDir, path.basename(attachmentInput.filename));
+    try {
+      const stat = fs.statSync(filePath);
+      const ext = path.extname(filePath).toLowerCase();
+      const mimeTypes: Record<string, string> = {
+        '.pdf': 'application/pdf', '.txt': 'text/plain', '.csv': 'text/csv',
+        '.json': 'application/json', '.xml': 'application/xml',
+        '.zip': 'application/zip', '.gz': 'application/gzip',
+        '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg',
+        '.gif': 'image/gif', '.webp': 'image/webp', '.svg': 'image/svg+xml',
+        '.mp3': 'audio/mpeg', '.wav': 'audio/wav', '.ogg': 'audio/ogg',
+        '.mp4': 'video/mp4', '.webm': 'video/webm',
+        '.html': 'text/html', '.css': 'text/css', '.js': 'application/javascript',
+      };
+      attachment = {
+        filename: path.basename(attachmentInput.filename),
+        mimetype: mimeTypes[ext] || 'application/octet-stream',
+        size: stat.size,
+      };
+    } catch {
+      res.status(400).json({ error: `File not found: ${attachmentInput.filename}` });
+      return;
+    }
+  }
+
   // Auto-clear agent state when agent sends a final message
   if (!type || type === 'message') {
     broadcast({ type: SSEEventType.AGENT_STATE, state: 'idle' });
   }
-  const message = createMessage('agent', content.trim(), { conversationId, type, name });
+  const message = createMessage('agent', content.trim(), { conversationId, type, name, attachment });
   res.json({ messageId: message.id });
 });
 

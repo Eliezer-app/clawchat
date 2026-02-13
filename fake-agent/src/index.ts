@@ -37,10 +37,19 @@ async function processMessage(content: string, signal: AbortSignal) {
     await sleep(1500, signal);
   }
 
+  const body: Record<string, unknown> = { content: `Echo: ${content}` };
+
+  // attach:filename — send message with file attachment
+  const attachMatch = content.match(/^attach:(.+)$/);
+  if (attachMatch) {
+    body.content = `Here is ${attachMatch[1]}`;
+    body.attachment = { filename: attachMatch[1] };
+  }
+
   await fetch(`${CHAT_URL}/send`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ content: `Echo: ${content}` }),
+    body: JSON.stringify(body),
   });
   setState('idle');
 }

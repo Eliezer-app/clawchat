@@ -50,7 +50,7 @@ export default function MessageBubble(props: MessageBubbleProps) {
                 <Show
                   when={isAudio(att().mimetype)}
                   fallback={
-                    <a class="file-attachment" href={getFileUrl()} target="_blank" rel="noopener">
+                    <a class="file-attachment" href={getFileUrl()} download={att().filename}>
                       <span class="file-icon">📎</span>
                       <div class="file-info">
                         <span class="file-name">{att().filename}</span>
