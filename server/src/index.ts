@@ -315,7 +315,9 @@ function authMiddleware(req: Request, res: Response, next: NextFunction) {
 // Auth endpoints (before middleware)
 // ===================
 
-// Invite verification - creates session
+	// GET /api/auth/invite?token= — Verify invite and create session.
+	//   Query: token string — invite token
+	//   Response: redirect to /
 publicApp.get('/api/auth/invite', (req, res) => {
   const token = req.query.token as string;
   if (!token) {
@@ -355,7 +357,8 @@ publicApp.get('/api/auth/invite', (req, res) => {
   res.redirect('/');
 });
 
-// Check auth status
+	// GET /api/auth/me — Check authentication status.
+	//   Response: { authenticated: true } or 401
 publicApp.get('/api/auth/me', (req, res) => {
   if (isAuthenticated(req)) {
     res.json({ authenticated: true });
@@ -364,7 +367,8 @@ publicApp.get('/api/auth/me', (req, res) => {
   }
 });
 
-// Logout
+	// POST /api/auth/logout — Clear session.
+	//   Response: { ok: true }
 publicApp.post('/api/auth/logout', (req, res) => {
   const token = req.cookies?.session;
   if (token) {
@@ -374,7 +378,8 @@ publicApp.post('/api/auth/logout', (req, res) => {
   res.json({ ok: true });
 });
 
-// Health check (public)
+	// GET /api/health — Health check.
+	//   Response: { status: "ok", api: "public" }
 publicApp.get('/api/health', (req, res) => {
   res.json({ status: 'ok', api: 'public' });
 });
@@ -422,12 +427,15 @@ publicApp.put('/api/agent/cron/:name/enabled', async (req, res) => {
 // Push notification endpoints
 // ===================
 
-// Get VAPID public key (public - needed before auth for service worker)
+	// GET /api/push/vapid-public-key — Get VAPID public key for push subscription.
+	//   Response: { publicKey: string }
 publicApp.get('/api/push/vapid-public-key', (req, res) => {
   res.json({ publicKey: getVapidPublicKey() });
 });
 
-// Subscribe to push notifications (requires auth)
+	// POST /api/push/subscribe — Subscribe to push notifications.
+	//   Request body: { endpoint, keys: { p256dh, auth } }
+	//   Response: { ok: true }
 publicApp.post('/api/push/subscribe', (req, res) => {
   if (!isAuthenticated(req)) {
     res.status(401).json({ error: 'Unauthorized' });
@@ -452,7 +460,9 @@ publicApp.post('/api/push/subscribe', (req, res) => {
   res.json({ ok: true });
 });
 
-// Unsubscribe from push notifications (requires auth)
+	// DELETE /api/push/subscribe — Unsubscribe from push notifications.
+	//   Request body: { endpoint: string }
+	//   Response: { ok: true }
 publicApp.delete('/api/push/subscribe', (req, res) => {
   if (!isAuthenticated(req)) {
     res.status(401).json({ error: 'Unauthorized' });
@@ -470,8 +480,9 @@ publicApp.delete('/api/push/subscribe', (req, res) => {
   res.json({ ok: true });
 });
 
-// Visibility tracking - client reports when tab is visible/hidden
-// Used to suppress push notifications when user is viewing chat
+	// POST /api/visibility — Report tab visibility for activity tracking.
+	//   Request body: { visible: boolean }
+	//   Response: { ok: true }
 publicApp.post('/api/visibility', (req, res) => {
   if (!isAuthenticated(req)) {
     res.status(401).json({ error: 'Unauthorized' });
@@ -575,6 +586,8 @@ publicApp.get('/manifest.json', (req, res) => {
 // Serve frontend static files (protected by auth middleware above)
 publicApp.use(express.static(clientDist, { index: false }));
 
+	// GET /api/events — SSE stream for real-time updates.
+	//   Events: message, delete, update, agentStatus, agentState, appStateUpdated, scrollToMessage
 publicApp.get('/api/events', (req, res) => {
   res.setHeader('Content-Type', 'text/event-stream');
   res.setHeader('Cache-Control', 'no-cache');
@@ -596,10 +609,15 @@ publicApp.get('/api/events', (req, res) => {
   }
 });
 
+	// GET /api/messages — List all messages.
+	//   Response: Message[]
 publicApp.get('/api/messages', (req, res) => {
   res.json(getMessages());
 });
 
+	// POST /api/messages — Send a user message.
+	//   Request body: { content: string }
+	//   Response: Message
 publicApp.post('/api/messages', (req, res) => {
   const { content } = req.body;
   if (!content || typeof content !== 'string' || !content.trim()) {
@@ -615,7 +633,9 @@ publicApp.post('/api/messages', (req, res) => {
   res.json(message);
 });
 
-// File upload endpoint
+	// POST /api/upload — Send a message with file attachment (multipart/form-data).
+	//   Form fields: file (file), content (string, optional)
+	//   Response: Message
 publicApp.post('/api/upload', upload.single('file'), (req, res) => {
   const file = req.file;
   const content = (req.body.content as string) || '';
@@ -644,6 +664,8 @@ publicApp.post('/api/upload', upload.single('file'), (req, res) => {
   res.json(message);
 });
 
+	// POST /api/stop — Stop the agent (proxied to agent).
+	//   Response: { ok: true } or 502
 publicApp.post('/api/stop', async (req, res) => {
   try {
     const r = await fetch(`${agentUrl}/stop`, { method: 'POST', signal: AbortSignal.timeout(5000) });
@@ -653,6 +675,8 @@ publicApp.post('/api/stop', async (req, res) => {
   }
 });
 
+	// DELETE /api/messages/:id — Delete a message.
+	//   Response: { ok: true } or 404
 publicApp.delete('/api/messages/:id', (req, res) => {
   const { id } = req.params;
   const message = getMessage(id);
@@ -702,11 +726,15 @@ function getPromptList(): PromptInfo[] {
   }
 }
 
+	// GET /api/prompts — List available prompts.
+	//   Response: [{ name, description }]
 publicApp.get('/api/prompts', (req, res) => {
   const prompts = getPromptList();
   res.json(prompts.map(p => ({ name: p.name, description: p.description })));
 });
 
+	// GET /api/prompts/:name — Get prompt content.
+	//   Response: { name, content } or 404
 publicApp.get('/api/prompts/:name', (req, res) => {
   const { name } = req.params;
   const prompts = getPromptList();
@@ -726,6 +754,9 @@ publicApp.get('/api/prompts/:name', (req, res) => {
   }
 });
 
+	// PUT /api/prompts/:name — Update prompt content.
+	//   Request body: { content: string }
+	//   Response: { ok: true } or 404
 publicApp.put('/api/prompts/:name', (req, res) => {
   const { name } = req.params;
   const { content } = req.body;
@@ -752,7 +783,8 @@ publicApp.put('/api/prompts/:name', (req, res) => {
   }
 });
 
-// App state endpoints (widgets are views into app state)
+	// GET /api/app-state/:appId — Get widget app state.
+	//   Response: { state, version } or 404
 publicApp.get('/api/app-state/:appId', (req, res) => {
   const { appId } = req.params;
   const state = getAppState(appId);
@@ -763,6 +795,9 @@ publicApp.get('/api/app-state/:appId', (req, res) => {
   res.json(state);
 });
 
+	// POST /api/app-state/:appId — Update widget app state.
+	//   Request body: { state: object }
+	//   Response: { state, version }
 publicApp.post('/api/app-state/:appId', (req, res) => {
   const { appId } = req.params;
   const { state, version } = req.body;
@@ -787,7 +822,9 @@ publicApp.post('/api/app-state/:appId', (req, res) => {
 });
 
 
-// Widget log endpoint - JSON body is written as-is to apps/<app-id>/logs/<yyyy-mm-dd>.log
+	// POST /api/widget-log/:appId — Write widget log entry.
+	//   Request body: any JSON (written as-is)
+	//   Response: { ok: true }
 publicApp.post('/api/widget-log/:appId', (req, res) => {
   const { appId } = req.params;
 

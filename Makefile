@@ -138,6 +138,6 @@ prod-logs-clear:
 prod-git-unlock:
 	@echo 'eval "$$(ssh-agent -s)" && ssh-add /root/.ssh/git_access'
 
-# Print Agent API docs (extracted from source comments)
+# Print API docs (extracted from source comments)
 api-docs:
-	@awk '/^[[:space:]]*\/\/ (GET|POST|PUT|PATCH|DELETE) \//{p=1} p{if(/^[[:space:]]*\/\//){sub(/^[[:space:]]*\/\/ ?/,"");print}else{p=0}}' server/src/index.ts
+	@awk 'BEGIN{app=""} /^agentApp\./{app="agent"} /^publicApp\./{app="public"} /^[[:space:]]*\/\/ (GET|POST|PUT|PATCH|DELETE) \//{p=1; a=app} p{if(/^[[:space:]]*\/\//){sub(/^[[:space:]]*\/\/ ?/,""); lines[a]=lines[a] $$0 "\n"}else{p=0}} END{print "=== Agent API (localhost:3100, no auth) ==="; printf "%s", lines["agent"]; print ""; print "=== Public API (localhost:3101, auth required) ==="; printf "%s", lines["public"]}' server/src/index.ts
