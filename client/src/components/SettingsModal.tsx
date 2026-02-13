@@ -181,8 +181,12 @@ export default function SettingsModal(props: SettingsModalProps) {
     switch (s) {
       case 'loading':
         return <span class="settings-status">Loading...</span>;
-      case 'unsupported':
-        return <span class="settings-status">Not supported in this browser</span>;
+      case 'unsupported': {
+        const isIOS = /iPad|iPhone/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+        return <span class="settings-status">
+          {isIOS ? 'To receive notifications, add this app to your Home Screen first (Share → Add to Home Screen)' : 'Not supported in this browser'}
+        </span>;
+      }
       case 'denied':
         return <span class="settings-status">Blocked by browser</span>;
       case 'subscribed':
