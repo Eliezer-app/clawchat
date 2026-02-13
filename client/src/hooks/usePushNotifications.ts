@@ -32,7 +32,7 @@ export function usePushNotifications() {
 
     // Check if already subscribed
     try {
-      const registration = await navigator.serviceWorker.getRegistration('/sw.js');
+      const registration = await navigator.serviceWorker.getRegistration('/');
       if (!registration) {
         setState('unsubscribed');
         return;
