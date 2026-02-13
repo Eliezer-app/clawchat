@@ -60,12 +60,12 @@ function notifyAgent(type: string, payload: unknown): void {
           if (json.error) error = json.error;
         } catch {}
         broadcast({ type: SSEEventType.AGENT_STATUS, connected: false, error });
-        broadcast({ type: SSEEventType.AGENT_TYPING, active: false });
+        broadcast({ type: SSEEventType.AGENT_STATE, state: 'idle' });
       }
     })
     .catch((err) => {
       broadcast({ type: SSEEventType.AGENT_STATUS, connected: false, error: err.message });
-      broadcast({ type: SSEEventType.AGENT_TYPING, active: false });
+      broadcast({ type: SSEEventType.AGENT_STATE, state: 'idle' });
     });
 }
 
@@ -158,21 +158,21 @@ agentApp.post('/send', (req, res) => {
     res.status(400).json({ error: 'Content required' });
     return;
   }
-  // Auto-clear typing indicator when agent sends a final message
+  // Auto-clear agent state when agent sends a final message
   if (!type || type === 'message') {
-    broadcast({ type: SSEEventType.AGENT_TYPING, active: false });
+    broadcast({ type: SSEEventType.AGENT_STATE, state: 'idle' });
   }
   const message = createMessage('agent', content.trim(), { conversationId, type, name });
   res.json({ messageId: message.id });
 });
 
-	// POST /typing — Set typing indicator.
+	// POST /state-changed — Agent state transition.
 	//   Request body:
-	//     active  boolean — true to show, false to hide
+	//     state  string — idle | inference | tool_execution | compaction
 	//   Response: { ok: true }
-agentApp.post('/typing', (req, res) => {
-  const { active } = req.body;
-  broadcast({ type: SSEEventType.AGENT_TYPING, active: !!active });
+agentApp.post('/state-changed', (req, res) => {
+  const { state } = req.body;
+  broadcast({ type: SSEEventType.AGENT_STATE, state: state || 'idle' });
   res.json({ ok: true });
 });
 

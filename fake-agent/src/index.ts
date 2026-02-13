@@ -9,6 +9,16 @@ app.use(express.json());
 const CHAT_URL = process.env.FAKE_AGENT_CHAT_URL || 'http://127.0.0.1:3100';
 
 let abortController: AbortController | null = null;
+let agentState = 'idle';
+
+function setState(state: string) {
+  agentState = state;
+  fetch(`${CHAT_URL}/state-changed`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ state }),
+  }).catch(() => {});
+}
 
 function sleep(ms: number, signal: AbortSignal): Promise<void> {
   return new Promise((resolve, reject) => {
@@ -17,60 +27,49 @@ function sleep(ms: number, signal: AbortSignal): Promise<void> {
   });
 }
 
-app.post('/events', async (req, res) => {
+async function processMessage(content: string, signal: AbortSignal) {
+  const states = content === 'compact'
+    ? ['compaction', 'inference', 'tool_execution', 'inference']
+    : ['inference', 'tool_execution', 'inference'];
+
+  for (const s of states) {
+    setState(s);
+    await sleep(1500, signal);
+  }
+
+  await fetch(`${CHAT_URL}/send`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ content: `Echo: ${content}` }),
+  });
+  setState('idle');
+}
+
+app.post('/events', (req, res) => {
   const { source, type, payload } = req.body;
   console.log(`[Agent] Event: ${source}/${type}`);
+  res.json({ ok: true });
 
   if (source === 'chat' && type === 'user_message') {
     abortController?.abort();
     abortController = new AbortController();
-    const { signal } = abortController;
-
-    // Set typing indicator
-    await fetch(`${CHAT_URL}/typing`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ active: true }),
-    });
-
-    // Crash if message is "crash"
-    if (payload.content === 'crash') {
-      console.log('[Agent] Crashing in 1s...');
-      await sleep(1000, signal);
-      throw new Error('Agent crashed on purpose');
-    }
-
-    try {
-      await sleep(3000, signal);
-
-      // Echo the message back
-      console.log(`[Agent] Calling ${CHAT_URL}/send`);
-      await fetch(`${CHAT_URL}/send`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ content: `Echo: ${payload.content}` }),
-      });
-    } catch (err) {
+    processMessage(payload.content, abortController.signal).catch((err) => {
       if (err instanceof DOMException && err.name === 'AbortError') {
         console.log('[Agent] Aborted');
-        await fetch(`${CHAT_URL}/typing`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ active: false }),
-        });
-        return res.json({ ok: true });
+        setState('idle');
+      } else {
+        console.error('[Agent] Error:', err);
+        setState('idle');
       }
-      throw err;
-    }
+    });
   }
-
-  res.json({ ok: true });
 });
 
 app.post('/stop', (req, res) => {
   console.log('[Agent] Stop requested');
   abortController?.abort();
   abortController = null;
+  setState('idle');
   res.json({ ok: true });
 });
 
@@ -80,6 +79,10 @@ app.get('/health', (req, res) => {
 
 app.get('/info/health', (req, res) => {
   res.json({ status: 'ok' });
+});
+
+app.get('/info/state', (req, res) => {
+  res.json({ state: agentState });
 });
 
 // Error handler - return JSON instead of HTML

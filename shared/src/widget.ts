@@ -11,6 +11,6 @@ export const SSEEventType = {
   UPDATE: 'update',
   APP_STATE_UPDATED: 'appStateUpdated',
   AGENT_STATUS: 'agentStatus',
-  AGENT_TYPING: 'agentTyping',
+  AGENT_STATE: 'agentState',
   SCROLL_TO_MESSAGE: 'scrollToMessage',
 } as const;

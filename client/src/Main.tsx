@@ -22,7 +22,14 @@ export default function Main() {
   const [lightbox, setLightbox] = createSignal<{ src: string; filename: string } | null>(null);
   const [showSettings, setShowSettings] = createSignal(false);
   const [agentConnected, setAgentConnected] = createSignal(true);
-  const [agentTyping, setAgentTyping] = createSignal(false);
+  const [agentState, setAgentState] = createSignal<string>('idle');
+  const agentBusy = () => agentState() !== 'idle';
+  const stateLabels: Record<string, string> = {
+    inference: 'Thinking…',
+    tool_execution: 'Running tool…',
+    compaction: 'Compacting…',
+  };
+  const stateLabel = () => stateLabels[agentState()] || 'Working…';
   const [toast, setToast] = createSignal<string | null>(null);
   const { shouldPrompt: shouldPromptNotifications, dismiss: dismissNotificationPrompt } = useShouldPromptNotifications();
 
@@ -47,7 +54,7 @@ export default function Main() {
   let ready = false;
   createEffect(() => {
     messages();
-    agentTyping();
+    agentBusy();
     if (ready) scrollToBottom();
   });
 
@@ -87,8 +94,8 @@ export default function Main() {
               setTimeout(() => setToast(null), 4000);
             }
             break;
-          case SSEEventType.AGENT_TYPING:
-            setAgentTyping(data.active);
+          case SSEEventType.AGENT_STATE:
+            setAgentState(data.state || 'idle');
             break;
           case SSEEventType.SCROLL_TO_MESSAGE:
             document.getElementById(`msg-${data.messageId}`)?.scrollIntoView({ behavior: 'instant', block: 'center' });
@@ -116,6 +123,18 @@ export default function Main() {
       return m;
     });
     return changed ? result : prev;
+  }
+
+  async function pollAgentState() {
+    try {
+      const res = await fetch('/api/agent/state');
+      if (res.ok) {
+        const data = await res.json();
+        setAgentState(data.state || 'idle');
+      }
+    } catch {
+      setAgentState('idle');
+    }
   }
 
   async function refreshMessages() {
@@ -173,11 +192,14 @@ export default function Main() {
     }
 
     connectSSE();
+    pollAgentState();
+    setInterval(pollAgentState, 30000);
 
     // Re-fetch messages when app returns from background (iOS kills SSE)
     document.addEventListener('visibilitychange', () => {
       if (document.visibilityState === 'visible') {
         refreshMessages();
+        pollAgentState();
         navigator.clearAppBadge?.();
         navigator.serviceWorker?.controller?.postMessage('clearBadge');
       }
@@ -185,7 +207,7 @@ export default function Main() {
 
     // Escape to stop agent
     document.addEventListener('keydown', (e) => {
-      if (e.key === 'Escape' && agentTyping()) stopAgent();
+      if (e.key === 'Escape' && agentBusy()) stopAgent();
     });
   });
 
@@ -389,12 +411,10 @@ export default function Main() {
                   }}
                 </For>
               )}
-              <Show when={agentTyping()}>
+              <Show when={agentBusy()}>
                 <div class="message agent">
                   <div class="bubble typing-indicator">
-                    <span class="dot"></span>
-                    <span class="dot"></span>
-                    <span class="dot"></span>
+                    <span class="state-label">{stateLabel()}</span>
                     <button class="typing-stop" onClick={stopAgent}>Stop</button>
                   </div>
                 </div>

@@ -13,3 +13,5 @@ data/
 apps/*
 !apps/common/
 !apps/example/
+apps/example/logs/
+apps/example/.handler.mjs
