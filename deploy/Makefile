@@ -15,7 +15,7 @@ ifndef DOMAIN
 	$(error DOMAIN is required. Usage: make setup DOMAIN=chat.example.com)
 endif
 
-# Deploy update: pull, install, build, restart
+# Deploy update: pull, install, build, restart, verify
 deploy:
 	cd $(APP_DIR) && git pull
 	cd $(APP_DIR) && corepack enable && pnpm install
@@ -23,6 +23,14 @@ deploy:
 	cd $(APP_DIR) && pnpm --filter @clawchat/client build
 	cd $(APP_DIR) && pnpm --filter @clawchat/server build
 	sudo systemctl restart clawchat
+	@echo "Waiting for server..."; \
+	for i in 1 2 3 4 5 6 7 8 9 10; do \
+		if curl -sf http://127.0.0.1:3101/api/health >/dev/null 2>&1; then \
+			echo "Health check passed"; exit 0; \
+		fi; \
+		sleep 1; \
+	done; \
+	echo "Health check failed after 10s"; journalctl -u clawchat -n 20 --no-pager; exit 1
 
 # Service status + recent logs
 status:
