@@ -34,6 +34,18 @@ services:
     depends_on:
       - server
 
+  widgets:
+    image: node:22-alpine
+    working_dir: /opt/clawchat
+    command: sh -c "corepack enable && pnpm install && node --watch widget-server/src/index.ts"
+    ports:
+      - "3103:3103"
+    volumes:
+      - .:/opt/clawchat
+      - widgets_store:/opt/clawchat/.pnpm-store
+      - widgets_root_modules:/opt/clawchat/node_modules
+      - widgets_modules:/opt/clawchat/widget-server/node_modules
+
 volumes:
   server_store:
   server_root_modules:
@@ -41,3 +53,6 @@ volumes:
   client_store:
   client_root_modules:
   client_modules:
+  widgets_store:
+  widgets_root_modules:
+  widgets_modules:

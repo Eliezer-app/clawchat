@@ -22,7 +22,7 @@ deploy:
 	cd $(APP_DIR) && pnpm --filter @clawchat/shared build
 	cd $(APP_DIR) && pnpm --filter @clawchat/client build
 	cd $(APP_DIR) && pnpm --filter @clawchat/server build
-	sudo systemctl restart clawchat
+	sudo systemctl restart clawchat clawchat-widgets
 	@echo "Waiting for server..."; \
 	for i in 1 2 3 4 5 6 7 8 9 10; do \
 		if curl -sf http://127.0.0.1:3101/api/health >/dev/null 2>&1; then \
@@ -70,9 +70,11 @@ install-service:
 	sudo chown -R clawchat:clawchat $(APP_DIR)/server/data $(APP_DIR)/apps /opt/eliezer/chat-public
 	sudo chown clawchat:clawchat $(APP_DIR)/.env
 	sudo cp $(APP_DIR)/deploy/clawchat.service /etc/systemd/system/
+	sudo cp $(APP_DIR)/deploy/clawchat-widgets.service /etc/systemd/system/
+	@grep -q "^WIDGET_SERVER_URL=" $(APP_DIR)/.env || echo "WIDGET_SERVER_URL=http://localhost:3103" >> $(APP_DIR)/.env
 	sudo systemctl daemon-reload
-	sudo systemctl enable clawchat
-	sudo systemctl restart clawchat
+	sudo systemctl enable clawchat clawchat-widgets
+	sudo systemctl restart clawchat clawchat-widgets
 
 install-nginx:
 	sudo apt-get install -y nginx

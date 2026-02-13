@@ -25,6 +25,7 @@ const agentUrl = requireEnv('AGENT_URL');
 const promptsDir = requireEnv('PROMPTS_DIR');
 const chatPublicDir = requireEnv('CHAT_PUBLIC_DIR');
 const appName = requireEnv('APP_NAME');
+const widgetServerUrl = process.env.WIDGET_SERVER_URL || '';
 
 // ===================
 // Agent Notification
@@ -591,6 +592,26 @@ publicApp.use(authMiddleware);
 
 // Serve shared files (uploads + agent-provided assets)
 if (chatPublicDir) publicApp.use('/chat-public', express.static(chatPublicDir));
+
+// Widget API proxy: /widget/<app>/api/* → widget server
+if (widgetServerUrl) {
+  publicApp.use('/widget/:app/api', async (req: Request, res: Response) => {
+    const { app } = req.params;
+    if (!/^[\w-]+$/.test(app)) { res.status(400).json({ error: 'Invalid app ID' }); return; }
+    const url = `${widgetServerUrl}/${app}${req.url}`;
+    try {
+      const r = await fetch(url, {
+        method: req.method,
+        headers: { 'Content-Type': 'application/json' },
+        body: ['GET', 'HEAD'].includes(req.method) ? undefined : JSON.stringify(req.body),
+        signal: AbortSignal.timeout(10000),
+      });
+      res.status(r.status).json(await r.json());
+    } catch {
+      res.status(502).json({ error: 'Widget server unreachable' });
+    }
+  });
+}
 
 // Widget static file serving: /widget/<app>/* → apps/<app>/public/*
 const widgetStatic = express.static(appsDir, { fallthrough: true });

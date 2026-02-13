@@ -113,13 +113,15 @@ prod-invite:
 
 # Production
 prod-start:
-	systemctl start clawchat
+	systemctl start clawchat clawchat-widgets
 
 prod-stop:
-	systemctl stop clawchat
+	systemctl stop clawchat clawchat-widgets
 
 prod-status:
 	@systemctl status clawchat --no-pager || true
+	@echo ""
+	@systemctl status clawchat-widgets --no-pager || true
 	@echo ""
 	@curl -sf http://127.0.0.1:3101/api/health && echo || echo "Health check failed"
 

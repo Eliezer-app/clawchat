@@ -1,0 +1,18 @@
+[Unit]
+Description=ClawChat Widget Server
+After=network.target
+
+[Service]
+Type=simple
+User=clawchat
+Group=clawchat
+WorkingDirectory=/opt/clawchat
+ExecStart=/usr/bin/node widget-server/src/index.ts
+Environment=WIDGET_SERVER_PORT=3103
+Restart=on-failure
+RestartSec=5
+StartLimitIntervalSec=60
+StartLimitBurst=5
+
+[Install]
+WantedBy=multi-user.target
