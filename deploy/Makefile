@@ -84,7 +84,7 @@ install-nginx:
 ssl:
 	sudo apt-get install -y certbot python3-certbot-nginx
 	@if sudo certbot certificates 2>/dev/null | grep -q "$(DOMAIN)"; then \
-		sudo certbot install --nginx -d $(DOMAIN); \
+		sudo certbot install --nginx --cert-name $(DOMAIN) -d $(DOMAIN); \
 	else \
 		sudo certbot --nginx -d $(DOMAIN); \
 	fi
