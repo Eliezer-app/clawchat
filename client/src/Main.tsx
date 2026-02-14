@@ -235,6 +235,16 @@ export default function Main() {
     await Promise.all(ids.map(id => fetch(`/api/messages/${id}`, { method: 'DELETE' })));
   };
 
+  const forgetFrom = async (id: string) => {
+    const res = await fetch('/api/forget/from', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ messageId: id }),
+    });
+    const data = await res.json();
+    if (!res.ok) setToast(data.error || 'Failed to forget');
+  };
+
   const stopAgent = () => {
     fetch('/api/stop', { method: 'POST' });
     setToast('Stopped');
@@ -341,14 +351,6 @@ export default function Main() {
             </Show>
 
             <div class="messages" ref={(el) => { messagesContainer = el; initScrollTracking(el); }} onClick={(e) => {
-              const anchor = (e.target as HTMLElement).closest('a[href^="#msg-"]') as HTMLAnchorElement;
-              if (anchor) {
-                e.preventDefault();
-                const id = anchor.getAttribute('href')!.slice(1);
-                document.getElementById(id)?.scrollIntoView({ behavior: 'instant', block: 'start' });
-                history.replaceState(null, '', anchor.getAttribute('href')!);
-                return;
-              }
               const img = (e.target as HTMLElement).closest('.markdown img') as HTMLImageElement;
               if (img) openLightbox(img.src, img.alt || 'image');
             }}>
@@ -399,6 +401,7 @@ export default function Main() {
                       <MessageBubble
                         message={msg}
                         onDelete={deleteMsg}
+                        onForget={forgetFrom}
                         onImageClick={openLightbox}
                         renderContent={renderContent}
                       />

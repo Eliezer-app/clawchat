@@ -1,6 +1,11 @@
 export const formatTime = (iso: string) => {
   const date = new Date(iso);
-  return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  const now = new Date();
+  const time = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  if (date.toDateString() === now.toDateString()) return time;
+  const sameYear = date.getFullYear() === now.getFullYear();
+  const dateStr = date.toLocaleDateString([], { month: 'short', day: 'numeric', ...(!sameYear && { year: 'numeric' }) });
+  return `${dateStr}, ${time}`;
 };
 
 export const formatSize = (bytes: number) => {
