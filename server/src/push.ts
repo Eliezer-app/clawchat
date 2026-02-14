@@ -23,10 +23,22 @@ interface PushPayload {
 }
 
 export async function sendPushToAll(payload: PushPayload): Promise<void> {
-  const subscriptions = getAllPushSubscriptions();
-  if (subscriptions.length === 0) return;
+  const allSubscriptions = getAllPushSubscriptions();
+  if (allSubscriptions.length === 0) return;
 
-  console.log(`[Push] Sending to ${subscriptions.length} subscriptions`);
+  // Skip sessions that have the app open — they already receive messages via SSE
+  const visibleSessionIds = new Set(getVisibleSessionIds());
+  const subscriptions = allSubscriptions.filter((sub) => !visibleSessionIds.has(sub.sessionId));
+
+  if (subscriptions.length === 0) {
+    console.log(`[Push] All ${allSubscriptions.length} subscribers are active, skipping`);
+    return;
+  }
+  if (subscriptions.length < allSubscriptions.length) {
+    console.log(`[Push] Sending to ${subscriptions.length}/${allSubscriptions.length} (${visibleSessionIds.size} active)`);
+  } else {
+    console.log(`[Push] Sending to ${subscriptions.length} subscriptions`);
+  }
   const payloadStr = JSON.stringify(payload);
 
   const results = await Promise.allSettled(

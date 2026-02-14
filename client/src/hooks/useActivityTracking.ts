@@ -22,9 +22,7 @@ export function useActivityTracking() {
   }
 
   function handleVisibilityChange() {
-    if (document.visibilityState === 'hidden') {
-      sendVisibility(false);
-    }
+    sendVisibility(document.visibilityState === 'visible');
   }
 
   function handlePageHide() {

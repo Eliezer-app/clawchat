@@ -37,17 +37,11 @@ self.addEventListener('push', (event) => {
     data: payload.data || {},
   };
 
+  // Server skips push for active sessions, so if we're here the user isn't looking.
+  // Always show the notification — never suppress, or iOS revokes the subscription.
   event.waitUntil(
     self.registration.showNotification(payload.title || 'New message', options)
       .then(() => navigator.setAppBadge?.(unreadCount))
-      .then(() => clients.matchAll({ type: 'window', includeUncontrolled: true }))
-      .then((windowClients) => {
-        if (windowClients.some((c) => c.visibilityState === 'visible')) {
-          unreadCount = 0;
-          navigator.clearAppBadge?.();
-          return self.registration.getNotifications().then((ns) => ns.forEach((n) => n.close()));
-        }
-      })
       .catch(() => {})
   );
 });
