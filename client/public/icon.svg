@@ -1,12 +1,8 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="106 314 621 621">
   <defs>
-    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" style="stop-color:#667eea"/>
-      <stop offset="100%" style="stop-color:#764ba2"/>
-    </linearGradient>
+    <clipPath id="clip">
+      <rect x="106" y="314" width="621" height="621" rx="0"/>
+    </clipPath>
   </defs>
-  <rect width="512" height="512" rx="96" fill="url(#bg)"/>
-  <g transform="translate(110, 94) scale(4.6)" fill="white">
-    <path d="M 63.574 57.324 L 63.574 70.02 L 17.774 70.02 Q 15.137 70.02 12.012 69.092 Q 8.887 68.164 6.226 66.04 Q 3.565 63.916 1.782 60.522 Q 0 57.129 0 52.197 L 0 6.396 Q 0 5.078 0.488 3.906 Q 0.977 2.734 1.831 1.855 Q 2.686 0.977 3.858 0.488 Q 5.029 0 6.397 0 L 63.574 0 L 63.574 12.695 L 12.695 12.695 L 12.695 52.197 Q 12.695 54.688 14.014 56.006 Q 15.332 57.324 17.871 57.324 L 63.574 57.324 Z M 57.861 28.613 L 57.861 41.406 L 17.774 41.406 L 17.774 28.613 L 57.861 28.613 Z"/>
-  </g>
+  <image xlink:href="image-idea.png" width="832" height="1248" clip-path="url(#clip)"/>
 </svg>
