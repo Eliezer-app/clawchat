@@ -38,15 +38,17 @@ self.addEventListener('push', (event) => {
   };
 
   event.waitUntil(
-    clients.matchAll({ type: 'window', includeUncontrolled: true }).then((windowClients) => {
-      const isVisible = windowClients.some((c) => c.visibilityState === 'visible');
-      if (isVisible) {
-        unreadCount = 0;
-        return;
-      }
-      return self.registration.showNotification(payload.title || 'New message', options)
-        .then(() => self.navigator.setAppBadge(unreadCount));
-    })
+    self.registration.showNotification(payload.title || 'New message', options)
+      .then(() => navigator.setAppBadge?.(unreadCount))
+      .then(() => clients.matchAll({ type: 'window', includeUncontrolled: true }))
+      .then((windowClients) => {
+        if (windowClients.some((c) => c.visibilityState === 'visible')) {
+          unreadCount = 0;
+          navigator.clearAppBadge?.();
+          return self.registration.getNotifications().then((ns) => ns.forEach((n) => n.close()));
+        }
+      })
+      .catch(() => {})
   );
 });
 
