@@ -1,4 +1,4 @@
-.PHONY: dev build typecheck lint clean install push-setup push-rotate-keys connect-mock-agent connect-dev-agent api-docs invite prod-deploy prod-start prod-stop prod-status prod-logs prod-logs-all prod-logs-clear prod-invite prod-git-unlock
+.PHONY: dev build typecheck lint clean install push-setup push-rotate-keys push-send-test connect-mock-agent connect-dev-agent api-docs invite prod-deploy prod-start prod-stop prod-status prod-logs prod-logs-all prod-logs-clear prod-invite prod-git-unlock
 
 # Development
 dev: connect-dev-agent
@@ -139,6 +139,10 @@ prod-logs-clear:
 
 prod-git-unlock:
 	@echo 'eval "$$(ssh-agent -s)" && ssh-add /root/.ssh/git_access'
+
+# Test push notification
+push-send-test:
+	@curl -X POST http://127.0.0.1:3100/send -H 'Content-Type: application/json' -d '{"content": "test push notification"}' && echo
 
 # Print API docs (extracted from source comments)
 api-docs:
