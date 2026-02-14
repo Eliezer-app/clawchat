@@ -1066,8 +1066,10 @@ span + .widget-container {
   display: block;
 }
 
-.time-menu button:hover {
-  background: #3a3a3a;
+@media (hover: hover) {
+  .time-menu button:hover {
+    background: #3a3a3a;
+  }
 }
 
 .time-menu button:active {
@@ -1098,7 +1100,7 @@ span + .widget-container {
   line-height: 1;
 }
 
-.message:hover .delete-btn {
+.bubble:hover .delete-btn {
   opacity: 1;
 }
 
@@ -1126,7 +1128,7 @@ span + .widget-container {
   line-height: 1;
 }
 
-.message:hover .open-widget-btn {
+.bubble:hover .open-widget-btn {
   opacity: 1;
 }
 
