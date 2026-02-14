@@ -549,6 +549,7 @@ export function useShouldPromptNotifications() {
   onMount(async () => {
     // Check if push notifications are supported
     if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
+      setShouldPrompt(true);
       return;
     }
 
