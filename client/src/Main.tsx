@@ -180,8 +180,8 @@ export default function Main() {
         if (location.hash) {
           document.getElementById(location.hash.slice(1))?.scrollIntoView({ behavior: 'instant', block: 'start' });
         } else {
-          scrollToBottom();
-          setTimeout(scrollToBottom, 500);
+          scrollToBottom(true);
+          setTimeout(() => scrollToBottom(true), 500);
         }
         ready = true;
       }
@@ -338,7 +338,7 @@ export default function Main() {
           <div class="app">
             <header class={`header ${agentConnected() ? '' : 'agent-offline'}`}>
               <a href="/" class="header-title" onClick={(e) => { if (!e.metaKey && !e.ctrlKey) { e.preventDefault(); history.replaceState(null, '', '/'); scrollToBottom(); } }}>{(window as any).__APP_NAME__}</a>
-              <button class="settings-btn" onClick={() => { refreshMessages(); scrollToBottom(); }} title="Refresh">↻</button>
+              <button class="settings-btn" onClick={() => { refreshMessages(); scrollToBottom(true); }} title="Refresh">↻</button>
               <button class="settings-btn" onClick={() => setShowSettings(true)} title="Settings">⚙</button>
             </header>
 
