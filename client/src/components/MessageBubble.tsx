@@ -50,10 +50,8 @@ export default function MessageBubble(props: MessageBubbleProps) {
   };
 
   const handleLink = () => {
-    const el = document.getElementById(`msg-${msg.id}`);
-    el?.scrollIntoView({ behavior: 'instant', block: 'start' });
-    history.replaceState(null, '', `#msg-${msg.id}`);
-    navigator.clipboard?.writeText(location.href);
+    const url = `${location.origin}/#msg-${msg.id}`;
+    navigator.clipboard?.writeText(url);
     setShowMenu(false);
   };
 
@@ -119,8 +117,8 @@ export default function MessageBubble(props: MessageBubbleProps) {
             ...(menuPos().above ? { bottom: `${window.innerHeight - menuPos().top + 4}px` } : { top: `${menuPos().top}px` }),
             ...(msg.role === 'user' ? { right: `${window.innerWidth - menuPos().left}px` } : { left: `${menuPos().left}px` }),
           }}>
-            <button onClick={handleLink}><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="15" height="15"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6M15 3h6v6M10 14L21 3"/></svg> Copy link</button>
-            <button class="time-menu-danger" onClick={handleForget}><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="15" height="15"><rect width="24" height="24" fill="none" stroke="none"/><path d="M3 7h18M8 7V5h8v2M19 7v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V7" transform="translate(0,-3.5)"/></svg> Forget from here</button>
+            <button onClick={handleLink}><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="15" height="15"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6M15 3h6v6M10 14L21 3"/></svg> Copy message link</button>
+            <button class="time-menu-danger" onClick={handleForget}><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="15" height="15"><rect width="24" height="24" fill="none" stroke="none"/><path d="M3 7h18M8 7V5h8v2M19 7v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V7" transform="translate(0,-3.5)"/></svg> Forget from here down</button>
           </div>
         </Show>
       </div>
