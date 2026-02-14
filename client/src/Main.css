@@ -281,6 +281,16 @@ body {
   line-height: 1.4;
 }
 
+.settings-callout {
+  margin: 12px 0 0;
+  padding: 10px 14px;
+  font-size: 13px;
+  line-height: 1.4;
+  border-radius: 8px;
+  border-left: 3px solid #667eea;
+  background: rgba(102, 126, 234, 0.1);
+}
+
 .settings-logout-btn {
   padding: 10px 24px;
   background: #ef4444;

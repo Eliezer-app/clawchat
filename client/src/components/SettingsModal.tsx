@@ -181,12 +181,8 @@ export default function SettingsModal(props: SettingsModalProps) {
     switch (s) {
       case 'loading':
         return <span class="settings-status">Loading...</span>;
-      case 'unsupported': {
-        const isIOS = /iPad|iPhone/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
-        return <span class="settings-status">
-          {isIOS ? 'To receive notifications, add this app to your Home Screen first (Share → Add to Home Screen)' : 'Not supported in this browser'}
-        </span>;
-      }
+      case 'unsupported':
+        return <span class="settings-status">Not available</span>;
       case 'denied':
         return <span class="settings-status">Blocked by browser</span>;
       case 'subscribed':
@@ -265,6 +261,17 @@ export default function SettingsModal(props: SettingsModalProps) {
                 </div>
                 {renderPushStatus()}
               </div>
+              <Show when={!window.matchMedia('(display-mode: standalone)').matches && (() => {
+                const isIOS = /iPad|iPhone/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+                if (isIOS && state() === 'unsupported') return 'ios' as const;
+                if ('ontouchstart' in window) return 'mobile' as const;
+                return false;
+              })()}>{(platform) =>
+                <p class="settings-callout">{platform() === 'ios'
+                  ? <>To receive notifications on iOS, add this page to your Home Screen:<br/><strong>Share → Add to Home Screen</strong></>
+                  : <>For the best experience, add this app to your Home Screen:<br/><strong>Menu → Add to Home Screen</strong></>
+                }</p>
+              }</Show>
             </div>
           </Show>
 
