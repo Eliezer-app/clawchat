@@ -1,7 +1,7 @@
 import { createSignal, onMount, onCleanup, Show } from 'solid-js';
 
 const MIN_HEIGHT = 60;
-const MAX_HEIGHT = 5000;
+const MAX_HEIGHT = 2000;
 const DEFAULT_HEIGHT = 100;
 const VIEWPORT_MARGIN = '500px';
 
@@ -15,6 +15,7 @@ interface WidgetProps {
 export default function Widget(props: WidgetProps) {
   const [visible, setVisible] = createSignal(false);
   const [height, setHeight] = createSignal(DEFAULT_HEIGHT);
+  const [clipped, setClipped] = createSignal(false);
   let iframeRef: HTMLIFrameElement | undefined;
   let containerRef: HTMLDivElement | undefined;
   let resizeObs: ResizeObserver | undefined;
@@ -27,7 +28,9 @@ export default function Widget(props: WidgetProps) {
     try {
       const doc = iframeRef.contentDocument;
       if (!doc?.body) return;
-      const h = Math.min(Math.max(Math.ceil(doc.documentElement.getBoundingClientRect().height), MIN_HEIGHT), MAX_HEIGHT);
+      const raw = Math.max(Math.ceil(doc.documentElement.getBoundingClientRect().height), MIN_HEIGHT);
+      const h = Math.min(raw, MAX_HEIGHT);
+      setClipped(raw > MAX_HEIGHT);
       if (h === previousHeight) return;
       previousHeight = h;
       iframeRef.style.height = h + 'px';
@@ -73,6 +76,11 @@ export default function Widget(props: WidgetProps) {
           class="widget-iframe"
           style={{ height: height() + 'px' }}
         />
+        <Show when={clipped()}>
+          <a class="widget-overflow" href={props.src} target="_blank" rel="noopener">
+            Content clipped — open in new tab
+          </a>
+        </Show>
       </Show>
     </div>
   );

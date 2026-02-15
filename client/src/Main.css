@@ -981,6 +981,14 @@ span + .widget-container {
   display: block;
 }
 
+.widget-overflow {
+  display: block;
+  text-align: center;
+  padding: 8px;
+  font-size: 12px;
+  color: #888;
+}
+
 .widget-placeholder {
   display: flex;
   align-items: center;
