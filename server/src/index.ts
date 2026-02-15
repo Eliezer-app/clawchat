@@ -733,9 +733,6 @@ publicApp.post('/api/stop', async (req, res) => {
 publicApp.post('/api/forget/from', async (req, res) => {
   const { messageId } = req.body;
   if (!messageId) { res.status(400).json({ error: 'messageId required' }); return; }
-  const ids = deleteMessagesFrom(messageId);
-  if (!ids.length) { res.status(404).json({ error: 'Message not found' }); return; }
-  for (const id of ids) broadcast({ type: 'delete', id });
   try {
     const r = await fetch(`${agentUrl}/forget/from`, {
       method: 'POST',
@@ -743,10 +740,16 @@ publicApp.post('/api/forget/from', async (req, res) => {
       body: JSON.stringify({ messageId }),
       signal: AbortSignal.timeout(5000),
     });
+    if (!r.ok) { res.status(502).json({ error: `Agent returned ${r.status}` }); return; }
     console.log(`[Forget] Agent responded: ${r.status}`);
   } catch (err) {
     console.log(`[Forget] Agent unreachable: ${(err as Error).message}`);
+    res.status(502).json({ error: 'Agent unreachable' });
+    return;
   }
+  const ids = deleteMessagesFrom(messageId);
+  if (!ids.length) { res.json({ ok: true, deleted: 0 }); return; }
+  for (const id of ids) broadcast({ type: 'delete', id });
   res.json({ ok: true, deleted: ids.length });
 });
 
