@@ -454,6 +454,17 @@ publicApp.put('/api/agent/cron/:name/enabled', async (req, res) => {
   }
 });
 
+// Tasks proxy
+publicApp.get('/api/agent/tasks', async (req, res) => {
+  try {
+    const r = await fetch(`${agentUrl}/tasks`, { signal: AbortSignal.timeout(3000) });
+    const data = await r.json();
+    res.status(r.status).json(data);
+  } catch {
+    res.status(502).json({ error: 'Agent unreachable' });
+  }
+});
+
 // ===================
 // Push notification endpoints
 // ===================

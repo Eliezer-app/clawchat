@@ -2,7 +2,7 @@ import { createSignal, onMount, Show, For, createEffect } from 'solid-js';
 import { usePushNotifications } from '../hooks/usePushNotifications';
 import LineEditor from './LineEditor';
 
-type Tab = 'notifications' | 'prompts' | 'agent' | 'cron' | 'forget' | 'account';
+type Tab = 'notifications' | 'prompts' | 'agent' | 'tasks' | 'cron' | 'forget' | 'account';
 
 interface SettingsModalProps {
   onClose: () => void;
@@ -94,6 +94,26 @@ export default function SettingsModal(props: SettingsModalProps) {
   const [agentError, setAgentError] = createSignal<string | null>(null);
   const [agentLoading, setAgentLoading] = createSignal(false);
 
+  // Tasks state
+  interface TaskGroup {
+    id: number;
+    parent_id: number | null;
+    title: string;
+    created_at: string;
+  }
+  interface Task {
+    id: number;
+    group_id: number | null;
+    title: string;
+    details: string;
+    status: string;
+    priority: number;
+    due_date: string | null;
+    created_at: string;
+  }
+  const [taskGroups, setTaskGroups] = createSignal<TaskGroup[]>([]);
+  const [tasks, setTasks] = createSignal<Task[]>([]);
+
   // Cron state
   const [crons, setCrons] = createSignal<any[]>([]);
 
@@ -139,8 +159,20 @@ export default function SettingsModal(props: SettingsModalProps) {
     } catch {}
   };
 
+  const fetchTasks = async () => {
+    try {
+      const res = await fetch('/api/agent/tasks');
+      if (res.ok) {
+        const data = await res.json();
+        setTaskGroups(data.groups || []);
+        setTasks(data.tasks || []);
+      }
+    } catch {}
+  };
+
   createEffect(() => {
     if (activeTab() === 'agent') fetchAgentInfo();
+    if (activeTab() === 'tasks') fetchTasks();
     if (activeTab() === 'cron') fetchCrons();
   });
 
@@ -167,6 +199,49 @@ export default function SettingsModal(props: SettingsModalProps) {
     return `${date} - ${ago}`;
   };
 
+
+  const renderGroupTree = (parentId: number | null): any => {
+    const groups = taskGroups().filter(g => g.parent_id === parentId);
+    const groupTasks = (groupId: number) => tasks().filter(t => t.group_id === groupId).sort((a, b) => a.priority - b.priority);
+    const rootTasks = parentId === null ? tasks().filter(t => t.group_id === null).sort((a, b) => a.priority - b.priority) : [];
+
+    if (groups.length === 0 && rootTasks.length === 0) return null;
+
+    return (
+      <div class={parentId !== null ? 'settings-task-children' : undefined}>
+        <For each={rootTasks}>{(task) => renderTask(task)}</For>
+        <For each={groups}>
+          {(group) => (
+            <div class={parentId === null ? 'settings-task' : 'settings-task-child'}>
+              <div class="settings-task-header">
+                <span class={parentId === null ? 'settings-row-title' : undefined}>{group.title}</span>
+              </div>
+              <div class="settings-task-children">
+                <For each={groupTasks(group.id)}>{(task) => renderTask(task)}</For>
+              </div>
+              {renderGroupTree(group.id)}
+            </div>
+          )}
+        </For>
+      </div>
+    );
+  };
+
+  const renderTask = (task: Task) => (
+    <div class="settings-task-child">
+      <div class="settings-task-header">
+        <span class="settings-task-status">{task.status === 'done' ? '✅' : task.status === 'active' ? '🔴' : '⚪'}</span>
+        <span class="settings-row-desc">[{task.id}]</span>
+        <span>{task.title}</span>
+        <Show when={task.due_date}>
+          <span class="settings-row-desc">{task.due_date}</span>
+        </Show>
+      </div>
+      <Show when={task.details}>
+        <p class="settings-row-desc">{task.details}</p>
+      </Show>
+    </div>
+  );
 
   const handlePushToggle = async () => {
     if (state() === 'subscribed') {
@@ -229,6 +304,12 @@ export default function SettingsModal(props: SettingsModalProps) {
               onClick={() => setActiveTab('agent')}
             >
               Agent
+            </button>
+            <button
+              class={`settings-tab ${activeTab() === 'tasks' ? 'settings-tab--active' : ''}`}
+              onClick={() => setActiveTab('tasks')}
+            >
+              Tasks
             </button>
             <button
               class={`settings-tab ${activeTab() === 'cron' ? 'settings-tab--active' : ''}`}
@@ -396,12 +477,12 @@ export default function SettingsModal(props: SettingsModalProps) {
                           <div class="settings-context-legend-item">
                             <span class="settings-context-dot settings-context-dot--flow" />
                             <span class="settings-context-legend-label">Flow</span>
-                            <span class="settings-context-legend-value">{fmtTokens(ctx.flow.tokens)} tokens</span>
+                            <span class="settings-context-legend-value">{fmtTokens(ctx.flow.tokens)} tokens ({ctx.flow.messages} messages)</span>
                           </div>
                           <div class="settings-context-legend-item">
                             <span class="settings-context-dot settings-context-dot--compacted" />
                             <span class="settings-context-legend-label">Compacted</span>
-                            <span class="settings-context-legend-value">{fmtTokens(ctx.compacted.tokens)} tokens{ctx.compacted.originalTokens ? ` (from ${fmtTokens(ctx.compacted.originalTokens)})` : ''}</span>
+                            <span class="settings-context-legend-value">{fmtTokens(ctx.compacted.tokens)} tokens ({ctx.compacted.groups} groups)</span>
                           </div>
                           <div class="settings-context-legend-item">
                             <span class="settings-context-dot settings-context-dot--memory" />
@@ -424,20 +505,23 @@ export default function SettingsModal(props: SettingsModalProps) {
                           </div>
                         </div>
                       </div>
-                      <For each={[['Compressions', m.ops.compressions], ['Distillations', m.ops.distillations]] as [string, string[]][]}>
-                        {([label, timestamps]) => (
+                      <For each={[['Compressions', m.ops.compressions], ['Distillations', m.ops.distillations]] as [string, any[]][]}>
+                        {([label, ops]) => (
                           <div class="settings-agent-group">
                             <h4 class="settings-agent-group-title">{label}</h4>
                             <div class="settings-agent-grid">
-                              <Show when={timestamps.length > 0} fallback={
+                              <Show when={ops.length > 0} fallback={
                                 <div class="settings-agent-item">
                                   <span class="settings-agent-ts">None yet</span>
                                 </div>
                               }>
-                                <For each={timestamps}>
-                                  {(ts: string) => (
+                                <For each={ops}>
+                                  {(op: any) => (
                                     <div class="settings-agent-item">
-                                      <span class="settings-agent-ts">{fmtTimestamp(ts)}</span>
+                                      <span class="settings-row-desc">{fmtTimestamp(op.at)}</span>
+                                      <Show when={op.reason}>
+                                        <span class="settings-agent-ts">{op.reason}</span>
+                                      </Show>
                                     </div>
                                   )}
                                 </For>
@@ -449,6 +533,19 @@ export default function SettingsModal(props: SettingsModalProps) {
                     </>
                   );
                 })()}
+              </Show>
+            </div>
+          </Show>
+
+          <Show when={activeTab() === 'tasks'}>
+            <div class="settings-section">
+              <div class="settings-agent-header">
+                <span class="settings-row-title">Tasks</span>
+                <button class="settings-agent-refresh" onClick={fetchTasks}>Refresh</button>
+              </div>
+              {renderGroupTree(null)}
+              <Show when={taskGroups().length === 0 && tasks().length === 0}>
+                <span class="settings-row-desc">No tasks</span>
               </Show>
             </div>
           </Show>
