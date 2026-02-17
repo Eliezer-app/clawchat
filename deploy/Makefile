@@ -21,7 +21,7 @@ deploy:
 	cd $(APP_DIR) && pnpm --filter @clawchat/shared build
 	cd $(APP_DIR) && pnpm --filter @clawchat/client build
 	cd $(APP_DIR) && pnpm --filter @clawchat/server build
-	sudo chown -R clawchat:clawchat $(APP_DIR)/server/data $(APP_DIR)/apps /opt/eliezer/chat-public
+	sudo chown -R clawchat:clawchat $(APP_DIR)/server/data $(APP_DIR)/apps /opt/eliezer/chat-public /opt/eliezer/prompts
 	sudo systemctl restart clawchat clawchat-widgets
 	@echo "Waiting for server..."; \
 	for i in 1 2 3 4 5 6 7 8 9 10; do \
@@ -64,10 +64,10 @@ build:
 
 install-service:
 	@id -u clawchat >/dev/null 2>&1 || (sudo useradd -r -s /usr/sbin/nologin clawchat && echo "Created clawchat user")
-	sudo mkdir -p $(APP_DIR)/server/data $(APP_DIR)/apps /opt/eliezer/chat-public
+	sudo mkdir -p $(APP_DIR)/server/data $(APP_DIR)/apps /opt/eliezer/chat-public /opt/eliezer/prompts
 	@test -f $(APP_DIR)/.env || (cp $(APP_DIR)/.env.example $(APP_DIR)/.env && echo "Created .env from .env.example")
 	@sed -i 's|^BASE_URL=.*|BASE_URL=https://$(DOMAIN)|' $(APP_DIR)/.env
-	sudo chown -R clawchat:clawchat $(APP_DIR)/server/data $(APP_DIR)/apps /opt/eliezer/chat-public
+	sudo chown -R clawchat:clawchat $(APP_DIR)/server/data $(APP_DIR)/apps /opt/eliezer/chat-public /opt/eliezer/prompts
 	sudo chown clawchat:clawchat $(APP_DIR)/.env
 	sudo cp $(APP_DIR)/deploy/clawchat.service /etc/systemd/system/
 	sudo cp $(APP_DIR)/deploy/clawchat-widgets.service /etc/systemd/system/
