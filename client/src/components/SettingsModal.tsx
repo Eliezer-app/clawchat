@@ -552,6 +552,10 @@ export default function SettingsModal(props: SettingsModalProps) {
 
           <Show when={activeTab() === 'cron'}>
             <div class="settings-section">
+              <div class="settings-agent-header">
+                <span class="settings-row-title">Schedule</span>
+                <button class="settings-agent-refresh" onClick={fetchCrons}>Refresh</button>
+              </div>
               <For each={crons()}>
                 {(cron) => (
                   <div class="settings-row">
