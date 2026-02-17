@@ -303,7 +303,7 @@ export default function SettingsModal(props: SettingsModalProps) {
               class={`settings-tab ${activeTab() === 'agent' ? 'settings-tab--active' : ''}`}
               onClick={() => setActiveTab('agent')}
             >
-              Agent
+              Memory
             </button>
             <button
               class={`settings-tab ${activeTab() === 'tasks' ? 'settings-tab--active' : ''}`}
