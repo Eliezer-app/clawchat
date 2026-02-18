@@ -17,7 +17,7 @@ endif
 # Deploy update: pull, install, build, restart, verify
 deploy:
 	cd $(APP_DIR) && git pull
-	cd $(APP_DIR) && corepack enable && pnpm install
+	cd $(APP_DIR) && COREPACK_ENABLE_AUTO_PIN=0 corepack enable -y && pnpm install
 	cd $(APP_DIR) && pnpm --filter @clawchat/shared build
 	cd $(APP_DIR) && pnpm --filter @clawchat/client build
 	cd $(APP_DIR) && pnpm --filter @clawchat/server build
@@ -74,7 +74,6 @@ install-service:
 	@grep -q "^WIDGET_SERVER_URL=" $(APP_DIR)/.env || echo "WIDGET_SERVER_URL=http://localhost:3103" >> $(APP_DIR)/.env
 	sudo systemctl daemon-reload
 	sudo systemctl enable clawchat clawchat-widgets
-	sudo systemctl restart clawchat clawchat-widgets
 
 install-nginx:
 	sudo apt-get install -y nginx
