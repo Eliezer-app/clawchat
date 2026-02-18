@@ -17,7 +17,7 @@ endif
 # Deploy update: pull, install, build, restart, verify
 deploy:
 	cd $(APP_DIR) && git pull
-	cd $(APP_DIR) && COREPACK_ENABLE_AUTO_PIN=0 corepack enable -y && pnpm install
+	cd $(APP_DIR) && corepack install && corepack enable && pnpm install
 	cd $(APP_DIR) && pnpm --filter @clawchat/shared build
 	cd $(APP_DIR) && pnpm --filter @clawchat/client build
 	cd $(APP_DIR) && pnpm --filter @clawchat/server build
