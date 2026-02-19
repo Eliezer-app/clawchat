@@ -1,6 +1,6 @@
 APP_DIR = /opt/clawchat
 
-.PHONY: setup deploy status logs build install-deps install-node install-service install-nginx ssl
+.PHONY: setup deploy status logs build install-deps install-node install-service install-nginx ssl fix-remote
 
 # Full setup: install system dependencies, configure systemd + nginx + ssl
 setup: require-domain install-node install-service install-nginx ssl
@@ -31,6 +31,11 @@ deploy:
 		sleep 1; \
 	done; \
 	echo "Health check failed after 10s"; journalctl -u clawchat -n 20 --no-pager; exit 1
+
+fix-remote:
+	cd $(APP_DIR) && git remote set-url origin git@github.com:Eliezer-app/clawchat.git
+	cd /opt/eliezer && git remote set-url origin git@github.com:Eliezer-app/eliezer.git
+	@echo "Remotes updated"
 
 # Service status + recent logs
 status:
