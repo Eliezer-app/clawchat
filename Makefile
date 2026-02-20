@@ -1,4 +1,4 @@
-.PHONY: dev build typecheck lint clean install push-setup push-rotate-keys push-send-test connect-mock-agent connect-dev-agent api-docs invite prod-deploy prod-start prod-stop prod-status prod-logs prod-logs-all prod-logs-clear prod-invite prod-git-unlock
+.PHONY: dev test build typecheck lint clean install push-setup push-rotate-keys push-send-test connect-mock-agent connect-dev-agent api-docs invite prod-deploy prod-start prod-stop prod-status prod-logs prod-logs-all prod-logs-clear prod-invite prod-git-unlock
 
 # Development
 dev: connect-dev-agent
@@ -19,6 +19,9 @@ _switch-env:
 	if [ -n "$$SK" ]; then echo "$$SK" >> .env; fi; \
 	if [ -n "$$SU" ]; then echo "$$SU" >> .env; fi
 	docker compose down && docker compose up -d
+
+# Test
+test: typecheck
 
 # Type checking
 typecheck:

@@ -15,3 +15,5 @@ apps/*
 !apps/example/
 apps/example/logs/
 apps/example/.handler.mjs
+*.mp4
+*.mov
