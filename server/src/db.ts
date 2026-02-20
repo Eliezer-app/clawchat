@@ -79,6 +79,8 @@ function migrate(db: Database.Database) {
       createdAt TEXT NOT NULL
     )
   `);
+
+  db.exec('CREATE INDEX IF NOT EXISTS idx_messages_createdAt ON messages(createdAt)');
 }
 
 interface DbMessage {
@@ -103,6 +105,34 @@ function parseDbMessage(row: DbMessage): Message {
 export function getMessages(): Message[] {
   const rows = db().prepare('SELECT * FROM messages ORDER BY createdAt ASC').all() as DbMessage[];
   return rows.map(parseDbMessage);
+}
+
+const PAGE_SIZE = 50;
+
+export function getMessagesPaginated(opts?: { before?: string; limit?: number }): { messages: Message[]; hasMore: boolean } {
+  const limit = (opts?.limit ?? PAGE_SIZE) + 1;
+  let rows: DbMessage[];
+  if (opts?.before) {
+    rows = db().prepare('SELECT * FROM messages WHERE createdAt < ? ORDER BY createdAt DESC LIMIT ?').all(opts.before, limit) as DbMessage[];
+  } else {
+    rows = db().prepare('SELECT * FROM messages ORDER BY createdAt DESC LIMIT ?').all(limit) as DbMessage[];
+  }
+  const hasMore = rows.length === limit;
+  if (hasMore) rows.pop();
+  rows.reverse();
+  return { messages: rows.map(parseDbMessage), hasMore };
+}
+
+export function getMessagesAround(messageId: string, contextBefore: number = PAGE_SIZE): { messages: Message[]; hasMore: boolean } | null {
+  const target = db().prepare('SELECT createdAt FROM messages WHERE id = ?').get(messageId) as { createdAt: string } | undefined;
+  if (!target) return null;
+  const before = db().prepare('SELECT * FROM messages WHERE createdAt < ? ORDER BY createdAt DESC LIMIT ?').all(target.createdAt, contextBefore) as DbMessage[];
+  before.reverse();
+  const fromTarget = db().prepare('SELECT * FROM messages WHERE createdAt >= ? ORDER BY createdAt ASC LIMIT ?').all(target.createdAt, PAGE_SIZE * 2) as DbMessage[];
+  return {
+    messages: [...before, ...fromTarget].map(parseDbMessage),
+    hasMore: before.length === contextBefore,
+  };
 }
 
 export function getMessage(id: string): Message | null {

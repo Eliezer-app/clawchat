@@ -15,3 +15,4 @@ export function scrollToBottom(force?: boolean) {
   container.scrollTop = container.scrollHeight;
   anchored = true;
 }
+

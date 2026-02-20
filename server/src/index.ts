@@ -6,7 +6,7 @@ import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
 import cookieParser from 'cookie-parser';
-import { getMessages, getMessage, addMessage, deleteMessage, deleteMessagesFrom, updateMessage, getAppState, setAppState, getSessionByToken, createSession, deleteSession, getInvite, markInviteUsed, createPushSubscription, deletePushSubscription, setSessionVisibility, updateSessionActivity } from './db.js';
+import { getMessages, getMessagesPaginated, getMessagesAround, getMessage, addMessage, deleteMessage, deleteMessagesFrom, updateMessage, getAppState, setAppState, getSessionByToken, createSession, deleteSession, getInvite, markInviteUsed, createPushSubscription, deletePushSubscription, setSessionVisibility, updateSessionActivity } from './db.js';
 import { initPush, getVapidPublicKey, sendPushToAll } from './push.js';
 import type { Message, Attachment } from '@clawchat/shared';
 import { SSEEventType } from '@clawchat/shared';
@@ -671,10 +671,20 @@ publicApp.get('/api/events', (req, res) => {
   }
 });
 
-	// GET /api/messages — List all messages.
-	//   Response: Message[]
+	// GET /api/messages — List messages (paginated).
+	//   Query params:
+	//     before   string (optional) — createdAt cursor, fetch older messages
+	//     around   string (optional) — message ID, fetch messages around this ID
+	//   Response: { messages: Message[], hasMore: boolean }
 publicApp.get('/api/messages', (req, res) => {
-  res.json(getMessages());
+  const around = req.query.around as string | undefined;
+  const before = req.query.before as string | undefined;
+  if (around) {
+    const result = getMessagesAround(around);
+    res.json(result || { messages: [], hasMore: false });
+    return;
+  }
+  res.json(getMessagesPaginated({ before }));
 });
 
 	// POST /api/messages — Send a user message.

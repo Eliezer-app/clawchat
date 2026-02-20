@@ -32,6 +32,8 @@ export default function Main() {
   const stateLabel = () => stateLabels[agentState()] || 'Working…';
   const [toast, setToast] = createSignal<string | null>(null);
   const { shouldPrompt: shouldPromptNotifications, dismiss: dismissNotificationPrompt } = useShouldPromptNotifications();
+  const [hasMore, setHasMore] = createSignal(false);
+  const [loadingOlder, setLoadingOlder] = createSignal(false);
 
   // Track user activity for push notification suppression
   useActivityTracking();
@@ -97,9 +99,24 @@ export default function Main() {
           case SSEEventType.AGENT_STATE:
             setAgentState(data.state || 'idle');
             break;
-          case SSEEventType.SCROLL_TO_MESSAGE:
-            document.getElementById(`msg-${data.messageId}`)?.scrollIntoView({ behavior: 'instant', block: 'center' });
+          case SSEEventType.SCROLL_TO_MESSAGE: {
+            const el = document.getElementById(`msg-${data.messageId}`);
+            if (el) {
+              el.scrollIntoView({ behavior: 'instant', block: 'center' });
+            } else {
+              fetch(`/api/messages?around=${encodeURIComponent(data.messageId)}`)
+                .then(r => r.ok ? r.json() : null)
+                .then(result => {
+                  if (!result) return;
+                  setMessages(result.messages);
+                  setHasMore(result.hasMore);
+                  requestAnimationFrame(() => {
+                    document.getElementById(`msg-${data.messageId}`)?.scrollIntoView({ behavior: 'instant', block: 'center' });
+                  });
+                });
+            }
             break;
+          }
         }
       } catch (err) {
         console.error('SSE parse error:', err);
@@ -139,11 +156,52 @@ export default function Main() {
     try {
       const res = await fetch('/api/messages');
       if (res.ok) {
-        const next: Message[] = await res.json();
-        setMessages(prev => mergeMessages(prev, next));
+        const data: { messages: Message[]; hasMore: boolean } = await res.json();
+        setMessages(prev => {
+          if (!prev.length) return data.messages;
+          const newIds = new Set(data.messages.map(m => m.id));
+          const oldestNew = data.messages.length ? data.messages[0].createdAt : '';
+          const olderKept = prev.filter(m => m.createdAt < oldestNew && !newIds.has(m.id));
+          const merged = mergeMessages(prev, data.messages);
+          return olderKept.length ? [...olderKept, ...merged] : merged;
+        });
+        setHasMore(data.hasMore);
       }
     } catch {}
     connectSSE();
+  }
+
+  async function loadOlderMessages() {
+    if (loadingOlder() || !hasMore()) return;
+    const msgs = messages();
+    if (!msgs.length) return;
+    const oldest = msgs[0].createdAt;
+    setLoadingOlder(true);
+    try {
+      const res = await fetch(`/api/messages?before=${encodeURIComponent(oldest)}`);
+      if (res.ok) {
+        const data: { messages: Message[]; hasMore: boolean } = await res.json();
+        if (data.messages.length) {
+          // Anchor to the first current child (skip loading indicator)
+          const anchor = messagesContainer?.querySelector('.message, .annotation');
+          const prevTop = anchor?.getBoundingClientRect().top ?? 0;
+          setMessages(prev => [...data.messages, ...prev]);
+          setLoadingOlder(false);
+          // SolidJS updates DOM synchronously — restore scroll position now
+          if (anchor && messagesContainer) {
+            const newTop = anchor.getBoundingClientRect().top;
+            messagesContainer.scrollTop += newTop - prevTop;
+          }
+        } else {
+          setLoadingOlder(false);
+        }
+        setHasMore(data.hasMore);
+        return;
+      }
+    } catch (e) {
+      console.error('Failed to load older messages:', e);
+    }
+    setLoadingOlder(false);
   }
 
   onMount(async () => {
@@ -173,12 +231,19 @@ export default function Main() {
 
     // Load messages
     try {
-      const res = await fetch('/api/messages');
+      const hashId = location.hash?.match(/^#msg-(.+)/)?.[1];
+      const url = hashId
+        ? `/api/messages?around=${encodeURIComponent(hashId)}`
+        : '/api/messages';
+      const res = await fetch(url);
       if (res.ok) {
-        const next: Message[] = await res.json();
-        setMessages(prev => mergeMessages(prev, next));
-        if (location.hash) {
-          document.getElementById(location.hash.slice(1))?.scrollIntoView({ behavior: 'instant', block: 'start' });
+        const data: { messages: Message[]; hasMore: boolean } = await res.json();
+        setMessages(data.messages);
+        setHasMore(data.hasMore);
+        if (hashId) {
+          requestAnimationFrame(() => {
+            document.getElementById(`msg-${hashId}`)?.scrollIntoView({ behavior: 'instant', block: 'start' });
+          });
         } else {
           scrollToBottom(true);
           setTimeout(() => scrollToBottom(true), 500);
@@ -350,10 +415,20 @@ export default function Main() {
               />
             </Show>
 
-            <div class="messages" ref={(el) => { messagesContainer = el; initScrollTracking(el); }} onClick={(e) => {
+            <div class="messages" ref={(el) => {
+              messagesContainer = el;
+              initScrollTracking(el);
+            }} onClick={(e) => {
               const img = (e.target as HTMLElement).closest('.markdown img') as HTMLImageElement;
               if (img) openLightbox(img.src, img.alt || 'image');
             }}>
+              <div class="loading-older" ref={(el) => {
+                new IntersectionObserver((entries) => {
+                  if (entries[0].isIntersecting && hasMore() && !loadingOlder()) loadOlderMessages();
+                }, { root: el.parentElement }).observe(el);
+              }}>
+                <Show when={loadingOlder()}>Loading older messages...</Show>
+              </div>
               {messages().length === 0 ? (
                 <div class="empty">No messages yet</div>
               ) : (
