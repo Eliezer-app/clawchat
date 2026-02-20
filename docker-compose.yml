@@ -38,6 +38,9 @@ services:
     image: node:22-alpine
     working_dir: /opt/clawchat
     command: sh -c "corepack enable && pnpm install && node --watch widget-server/src/index.ts"
+    environment:
+      - WIDGET_SERVER_PORT=3103
+      - WIDGET_SERVER_HOST=0.0.0.0
     ports:
       - "3103:3103"
     volumes:

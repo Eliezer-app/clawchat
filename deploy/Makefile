@@ -22,6 +22,9 @@ deploy:
 	cd $(APP_DIR) && pnpm --filter @clawchat/client build
 	cd $(APP_DIR) && pnpm --filter @clawchat/server build
 	sudo chown -R clawchat:clawchat $(APP_DIR)/server/data $(APP_DIR)/apps /opt/eliezer/chat-public /opt/eliezer/prompts
+	sudo cp $(APP_DIR)/deploy/clawchat.service /etc/systemd/system/
+	sudo cp $(APP_DIR)/deploy/clawchat-widgets.service /etc/systemd/system/
+	sudo systemctl daemon-reload
 	sudo systemctl restart clawchat clawchat-widgets
 	@echo "Waiting for server..."; \
 	for i in 1 2 3 4 5 6 7 8 9 10; do \

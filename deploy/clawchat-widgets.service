@@ -9,6 +9,7 @@ Group=clawchat
 WorkingDirectory=/opt/clawchat
 ExecStart=/usr/bin/node widget-server/src/index.ts
 Environment=WIDGET_SERVER_PORT=3103
+Environment=WIDGET_SERVER_HOST=127.0.0.1
 Restart=on-failure
 RestartSec=5
 StartLimitIntervalSec=60

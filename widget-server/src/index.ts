@@ -3,7 +3,14 @@ import { readdirSync, existsSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 
 const appsDir = resolve(import.meta.dirname, '../../apps');
-const port = process.env.WIDGET_SERVER_PORT || 3103;
+function requireEnv(name: string): string {
+  const value = process.env[name];
+  if (!value) throw new Error(`${name} environment variable is required`);
+  return value;
+}
+
+const port = Number(requireEnv('WIDGET_SERVER_PORT'));
+const host = requireEnv('WIDGET_SERVER_HOST');
 
 const app = express();
 app.use(express.json());
@@ -28,6 +35,6 @@ for (const entry of entries) {
 
 app.get('/health', (_req, res) => res.json({ ok: true }));
 
-app.listen(port, () => {
-  console.log(`Widget server on port ${port}`);
+app.listen(port, host, () => {
+  console.log(`Widget server on ${host}:${port}`);
 });
