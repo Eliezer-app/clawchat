@@ -28,3 +28,7 @@ Allow the agent API to signal "typing" state to the chat UI.
 - [x] Typing indicator disappears when new agent message arrives
 - [x] Move stop button by the typing bubble
 - [x] Fix scroll to bottom on page load — does not reliably stay at bottom when images/widgets load
+
+## Infinite Scroll
+
+- [x] IntersectionObserver sometimes misses the event when scrolled to top — replaced with scroll event + threshold

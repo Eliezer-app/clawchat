@@ -418,15 +418,14 @@ export default function Main() {
             <div class="messages" ref={(el) => {
               messagesContainer = el;
               initScrollTracking(el);
+              el.addEventListener('scroll', () => {
+                if (el.scrollTop < 500 && hasMore() && !loadingOlder()) loadOlderMessages();
+              });
             }} onClick={(e) => {
               const img = (e.target as HTMLElement).closest('.markdown img') as HTMLImageElement;
               if (img) openLightbox(img.src, img.alt || 'image');
             }}>
-              <div class="loading-older" ref={(el) => {
-                new IntersectionObserver((entries) => {
-                  if (entries[0].isIntersecting && hasMore() && !loadingOlder()) loadOlderMessages();
-                }, { root: el.parentElement }).observe(el);
-              }}>
+              <div class="loading-older">
                 <Show when={loadingOlder()}>Loading older messages...</Show>
               </div>
               {messages().length === 0 ? (

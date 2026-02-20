@@ -1463,10 +1463,8 @@ span + .widget-container {
   font-size: 15px;
 }
 
+.loading-older:empty { display: none; }
 .loading-older {
-  min-height: 1px;
-}
-.loading-older:not(:empty) {
   text-align: center;
   padding: 12px;
   color: #999;
