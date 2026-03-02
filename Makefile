@@ -79,7 +79,11 @@ _push-setup-dev:
 		echo "VAPID keys already exist in .env"; \
 	else \
 		echo "Generating VAPID keys..."; \
-		KEYS=$$(docker compose exec server npx web-push generate-vapid-keys --json 2>/dev/null); \
+		if docker compose ps --status running server 2>/dev/null | grep -q server; then \
+			KEYS=$$(docker compose exec server npx web-push generate-vapid-keys --json 2>/dev/null); \
+		else \
+			KEYS=$$(npx web-push generate-vapid-keys --json 2>/dev/null); \
+		fi; \
 		PUBLIC=$$(echo "$$KEYS" | grep -o '"publicKey":"[^"]*"' | cut -d'"' -f4); \
 		PRIVATE=$$(echo "$$KEYS" | grep -o '"privateKey":"[^"]*"' | cut -d'"' -f4); \
 		sed -i '' '/^#.*VAPID/d' .env; \
@@ -90,8 +94,10 @@ _push-setup-dev:
 		echo "VAPID_PRIVATE_KEY=$$PRIVATE" >> .env; \
 		echo "VAPID_SUBJECT=mailto:admin@localhost" >> .env; \
 		echo "VAPID keys added to .env"; \
-		echo "Restarting server..."; \
-		docker compose restart server; \
+		if docker compose ps --status running server 2>/dev/null | grep -q server; then \
+			echo "Restarting server..."; \
+			docker compose restart server; \
+		fi; \
 	fi
 
 # Rotate VAPID keys (replaces existing keys in .env and restarts server)
