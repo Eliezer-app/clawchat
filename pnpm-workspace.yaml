@@ -3,3 +3,4 @@ packages:
   - client
   - shared
   - fake-agent
+  - widget-server
