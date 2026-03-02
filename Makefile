@@ -115,7 +115,11 @@ push-rotate-keys:
 
 # Create invite token
 invite:
-	docker compose exec server pnpm run invite
+	@if docker compose ps --status running server 2>/dev/null | grep -q server; then \
+		docker compose exec server pnpm run invite; \
+	else \
+		pnpm --filter @clawchat/server run invite; \
+	fi
 
 prod-invite:
 	cd /opt/clawchat && pnpm run invite
