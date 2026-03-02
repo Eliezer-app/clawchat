@@ -10,6 +10,7 @@ import { getMessages, getMessagesPaginated, getMessagesAround, getMessage, addMe
 import { initPush, getVapidPublicKey, sendPushToAll } from './push.js';
 import type { Message, Attachment } from '@clawchat/shared';
 import { SSEEventType } from '@clawchat/shared';
+import { slaveApp, initSlave, notifySlaves } from './slave.js';
 
 function requireEnv(name: string): string {
   const value = process.env[name];
@@ -124,6 +125,7 @@ function createMessage(role: Message['role'], content: string, opts?: { conversa
     createdAt: new Date().toISOString(),
   });
   broadcast({ type: 'message', message });
+  notifySlaves(message);
 
   // Send push notification for regular agent messages only
   if (role === 'agent' && (opts?.type || 'message') === 'message') {
@@ -144,6 +146,22 @@ function createMessage(role: Message['role'], content: string, opts?: { conversa
 // ===================
 const agentApp = express();
 agentApp.use(express.json());
+agentApp.use('/slave', slaveApp);
+const slaveUrlsRaw = process.env.SLAVE_URLS || '';
+initSlave(
+  slaveUrlsRaw ? slaveUrlsRaw.split(',').map(u => u.trim()) : [],
+  {
+    createUserMessage: (content: string) => {
+      const message = createMessage('user', content);
+      notifyAgent('user_message', {
+        conversationId: message.conversationId,
+        messageId: message.id,
+        content: message.content,
+      });
+      return message;
+    },
+  },
+);
 
 	// POST /send — Send a message to chat.
 	//   Request body:
