@@ -149,4 +149,5 @@ push-send-test:
 
 # Print API docs (extracted from source comments)
 api-docs:
-	@awk 'BEGIN{app=""} /^agentApp\./{app="agent"} /^publicApp\./{app="public"} /^slaveApp\./{app="slave"} /^[[:space:]]*\/\/ (GET|POST|PUT|PATCH|DELETE) \//{p=1; a=app} p{if(/^[[:space:]]*\/\//){sub(/^[[:space:]]*\/\/ ?/,""); lines[a]=lines[a] $$0 "\n"}else{p=0}} END{print "=== Agent API (localhost:3100, no auth) ==="; printf "%s", lines["agent"]; print ""; print "=== Slave API (localhost:3100/slave, no auth) ==="; printf "%s", lines["slave"]; print ""; print "=== Public API (localhost:3101, auth required) ==="; printf "%s", lines["public"]}' server/src/index.ts server/src/slave.ts
+	@. .env 2>/dev/null; \
+	awk -v ap="$$AGENT_PORT" -v sp="$$SLAVE_PORT" -v pp="$$PUBLIC_PORT" 'BEGIN{app=""} /^agentApp\./{app="agent"} /^publicApp\./{app="public"} /^slaveApp\./{app="slave"} /^[[:space:]]*\/\/ (GET|POST|PUT|PATCH|DELETE) \//{p=1; a=app} p{if(/^[[:space:]]*\/\//){sub(/^[[:space:]]*\/\/ ?/,""); lines[a]=lines[a] $$0 "\n"}else{p=0}} END{print "=== Agent API (:" ap ", no auth) ==="; printf "%s", lines["agent"]; print ""; print "---"; print ""; print "=== Slave API (:" sp ", no auth) ==="; printf "%s", lines["slave"]; print ""; print "---"; print ""; print "=== Public API (:" pp ", auth required) ==="; printf "%s", lines["public"]}' server/src/index.ts server/src/slave.ts

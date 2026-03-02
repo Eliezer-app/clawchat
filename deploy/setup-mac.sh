@@ -25,6 +25,10 @@ cd "$REPO_DIR"
 pnpm install
 
 echo
+echo "--- Building shared ---"
+pnpm --filter @clawchat/shared build
+
+echo
 echo "--- Building client ---"
 pnpm --filter @clawchat/client build
 

@@ -2,6 +2,7 @@
 
 ## Important
 
+- **NEVER `git push` without explicit approval. This code is auto-deployed to multiple systems. Pushing without permission can break production.**
 - **Do not kill Docker processes** - Multiple projects run on this machine
 - Do not use arbitrary sleeps to wait for processes
 - When asked to review code, act as a senior SWE with SOLID principles!

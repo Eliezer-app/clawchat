@@ -146,7 +146,6 @@ function createMessage(role: Message['role'], content: string, opts?: { conversa
 // ===================
 const agentApp = express();
 agentApp.use(express.json());
-agentApp.use('/slave', slaveApp);
 const slaveUrlsRaw = process.env.SLAVE_URLS || '';
 initSlave(
   slaveUrlsRaw ? slaveUrlsRaw.split(',').map(u => u.trim()) : [],
@@ -991,6 +990,11 @@ async function start() {
   const agentHost = requireEnv('AGENT_HOST');
   agentApp.listen(Number(agentPort), agentHost, () => {
     console.log(`Agent API running on ${agentHost}:${agentPort}`);
+  });
+
+  const slavePort = requireEnv('SLAVE_PORT');
+  slaveApp.listen(Number(slavePort), agentHost, () => {
+    console.log(`Slave API running on ${agentHost}:${slavePort}`);
   });
 
   const publicHost = requireEnv('PUBLIC_HOST');

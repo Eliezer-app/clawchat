@@ -13,12 +13,17 @@ export function initSlave(urls: string[], deps: { createUserMessage: (content: s
   if (urls.length) console.log(`[Slave] Forwarding to: ${urls.join(', ')}`);
 }
 
-// POST /send — Send a message as user.
+// POST /slave/send — Send a message as user.
 //   Request body:
+//     role     string — must be "user"
 //     content  string — message text
 //   Response: 204 No Content
-slaveApp.post('/send', (req, res) => {
-  const { content } = req.body;
+slaveApp.post('/slave/send', (req, res) => {
+  const { role, content } = req.body;
+  if (role !== 'user') {
+    res.status(400).json({ error: 'role must be "user"' });
+    return;
+  }
   if (!content || typeof content !== 'string' || !content.trim()) {
     res.status(400).json({ error: 'content required' });
     return;
