@@ -417,14 +417,14 @@ publicApp.get('/api/auth/me', (req, res) => {
 });
 
 	// POST /api/auth/logout — Clear session.
-	//   Response: { ok: true }
+	//   Response: 204 No Content
 publicApp.post('/api/auth/logout', (req, res) => {
   const token = req.cookies?.session;
   if (token) {
     deleteSession(token);
   }
   res.clearCookie('session');
-  res.json({ ok: true });
+  res.status(204).end();
 });
 
 	// GET /api/health — Health check.
@@ -495,7 +495,7 @@ publicApp.get('/api/push/vapid-public-key', (req, res) => {
 
 	// POST /api/push/subscribe — Subscribe to push notifications.
 	//   Request body: { endpoint, keys: { p256dh, auth } }
-	//   Response: { ok: true }
+	//   Response: 204 No Content
 publicApp.post('/api/push/subscribe', (req, res) => {
   if (!isAuthenticated(req)) {
     res.status(401).json({ error: 'Unauthorized' });
@@ -517,12 +517,12 @@ publicApp.post('/api/push/subscribe', (req, res) => {
 
   createPushSubscription(session.id, endpoint, keys.p256dh, keys.auth);
   console.log('[Push] Subscribed:', session.id);
-  res.json({ ok: true });
+  res.status(204).end();
 });
 
 	// DELETE /api/push/subscribe — Unsubscribe from push notifications.
 	//   Request body: { endpoint: string }
-	//   Response: { ok: true }
+	//   Response: 204 No Content
 publicApp.delete('/api/push/subscribe', (req, res) => {
   if (!isAuthenticated(req)) {
     res.status(401).json({ error: 'Unauthorized' });
@@ -537,12 +537,12 @@ publicApp.delete('/api/push/subscribe', (req, res) => {
 
   deletePushSubscription(endpoint);
   console.log('[Push] Unsubscribed:', endpoint);
-  res.json({ ok: true });
+  res.status(204).end();
 });
 
 	// POST /api/visibility — Report tab visibility for activity tracking.
 	//   Request body: { visible: boolean }
-	//   Response: { ok: true }
+	//   Response: 204 No Content
 publicApp.post('/api/visibility', (req, res) => {
   if (!isAuthenticated(req)) {
     res.status(401).json({ error: 'Unauthorized' });
@@ -564,7 +564,7 @@ publicApp.post('/api/visibility', (req, res) => {
 
   setSessionVisibility(session.id, visible);
   updateSessionActivity(session.id);
-  res.json({ ok: true });
+  res.status(204).end();
 });
 
 // Invite landing page (public)
@@ -793,7 +793,7 @@ publicApp.post('/api/forget/from', async (req, res) => {
 });
 
 	// DELETE /api/messages/:id — Delete a message.
-	//   Response: { ok: true } or 404
+	//   Response: 204 No Content or 404
 publicApp.delete('/api/messages/:id', (req, res) => {
   const { id } = req.params;
   const message = getMessage(id);
@@ -804,7 +804,7 @@ publicApp.delete('/api/messages/:id', (req, res) => {
     conversationId: message.conversationId,
     messageId: id,
   });
-  res.json({ ok: true });
+  res.status(204).end();
 });
 
 // ===================
@@ -873,7 +873,7 @@ publicApp.get('/api/prompts/:name', (req, res) => {
 
 	// PUT /api/prompts/:name — Update prompt content.
 	//   Request body: { content: string }
-	//   Response: { ok: true } or 404
+	//   Response: 204 No Content or 404
 publicApp.put('/api/prompts/:name', (req, res) => {
   const { name } = req.params;
   const { content } = req.body;
@@ -894,7 +894,7 @@ publicApp.put('/api/prompts/:name', (req, res) => {
   try {
     const fullPath = prompt.path;
     fs.writeFileSync(fullPath, content, 'utf-8');
-    res.json({ ok: true });
+    res.status(204).end();
   } catch (err) {
     res.status(500).json({ error: 'Failed to save prompt' });
   }
@@ -941,7 +941,7 @@ publicApp.post('/api/app-state/:appId', (req, res) => {
 
 	// POST /api/widget-log/:appId — Write widget log entry.
 	//   Request body: any JSON (written as-is)
-	//   Response: { ok: true }
+	//   Response: 204 No Content
 publicApp.post('/api/widget-log/:appId', (req, res) => {
   const { appId } = req.params;
 
@@ -961,10 +961,10 @@ publicApp.post('/api/widget-log/:appId', (req, res) => {
   try {
     fs.mkdirSync(logDir, { recursive: true });
     fs.appendFileSync(logFile, logLine);
-    res.json({ ok: true });
+    res.status(204).end();
   } catch (err) {
     console.error('[Widget Log] Write failed:', err);
-    res.status(500).json({ ok: false, error: 'Failed to write log' });
+    res.status(500).json({ error: 'Failed to write log' });
   }
 });
 
