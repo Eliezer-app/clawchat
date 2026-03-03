@@ -34,6 +34,7 @@ export default function Main() {
   const { shouldPrompt: shouldPromptNotifications, dismiss: dismissNotificationPrompt } = useShouldPromptNotifications();
   const [hasMore, setHasMore] = createSignal(false);
   const [loadingOlder, setLoadingOlder] = createSignal(false);
+  const [partialMessageId, setPartialMessageId] = createSignal<string | null>(null);
 
   // Track user activity for push notification suppression
   useActivityTracking();
@@ -72,12 +73,16 @@ export default function Main() {
         switch (data.type) {
           case SSEEventType.MESSAGE:
             setMessages(msgs => [...msgs, data.message]);
+            setPartialMessageId(data.partial ? data.message.id : null);
             break;
           case SSEEventType.DELETE:
             setMessages(msgs => msgs.filter(m => m.id !== data.id));
+            if (partialMessageId() === data.id) setPartialMessageId(null);
             break;
           case SSEEventType.UPDATE:
             setMessages(msgs => msgs.map(m => m.id === data.message.id ? data.message : m));
+            if (data.partial) setPartialMessageId(data.message.id);
+            else if (partialMessageId() === data.message.id) setPartialMessageId(null);
             break;
           case SSEEventType.APP_STATE_UPDATED: {
             const ch = new BroadcastChannel(`app:${data.appId}`);
@@ -474,6 +479,7 @@ export default function Main() {
                     return (
                       <MessageBubble
                         message={msg}
+                        partial={msg.id === partialMessageId()}
                         onDelete={deleteMsg}
                         onForget={forgetFrom}
                         onImageClick={openLightbox}

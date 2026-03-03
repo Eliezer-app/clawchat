@@ -10,7 +10,7 @@ import { getMessages, getMessagesPaginated, getMessagesAround, getMessage, addMe
 import { initPush, getVapidPublicKey, sendPushToAll } from './push.js';
 import type { Message, Attachment } from '@clawchat/shared';
 import { SSEEventType } from '@clawchat/shared';
-import { slaveApp, initSlave, notifySlaves } from './slave.js';
+import { initSubscribers, notifySubscribers } from './subscribers.js';
 
 function requireEnv(name: string): string {
   const value = process.env[name];
@@ -125,7 +125,7 @@ function createMessage(role: Message['role'], content: string, opts?: { conversa
     createdAt: new Date().toISOString(),
   });
   broadcast({ type: 'message', message });
-  notifySlaves(message);
+  notifySubscribers(message);
 
   // Send push notification for regular agent messages only
   if (role === 'agent' && (opts?.type || 'message') === 'message') {
@@ -146,34 +146,111 @@ function createMessage(role: Message['role'], content: string, opts?: { conversa
 // ===================
 const agentApp = express();
 agentApp.use(express.json());
-const slaveUrlsRaw = process.env.SLAVE_URLS || '';
-initSlave(
-  slaveUrlsRaw ? slaveUrlsRaw.split(',').map(u => u.trim()) : [],
-  {
-    createUserMessage: (content: string) => {
-      const message = createMessage('user', content);
-      notifyAgent('user_message', {
-        conversationId: message.conversationId,
-        messageId: message.id,
-        content: message.content,
-      });
-      return message;
-    },
-  },
-);
+const subscriberUrlsRaw = requireEnv('SUBSCRIBER_URLS');
+initSubscribers(subscriberUrlsRaw && subscriberUrlsRaw !== 'none' ? subscriberUrlsRaw.split(',').map(u => u.trim()) : []);
 
-	// POST /send — Send a message to chat.
+	// POST /user/send — Send a message as user (for external input like voice).
 	//   Request body:
-	//     conversationId  string  — target conversation (e.g. "default")
+	//     role     string  — must be "user"
+	//     content  string  — message text
+	//     partial  boolean? — true for streaming STT fragments (updated in place, 10s timeout)
+	//   Response:
+	//     messageId  string  — assigned message ID
+let pendingUserMessage: { id: string; timer: ReturnType<typeof setTimeout> } | null = null;
+
+function clearPendingUser() {
+  if (!pendingUserMessage) return;
+  clearTimeout(pendingUserMessage.timer);
+  const id = pendingUserMessage.id;
+  pendingUserMessage = null;
+  deleteMessage(id);
+  broadcast({ type: 'delete', id });
+}
+
+agentApp.post('/user/send', (req, res) => {
+  const { role, content, partial } = req.body;
+  if (role !== 'user') {
+    res.status(400).json({ error: 'role must be "user"' });
+    return;
+  }
+  if (!content || typeof content !== 'string' || !content.trim()) {
+    res.status(400).json({ error: 'content required' });
+    return;
+  }
+
+  if (partial) {
+    if (pendingUserMessage) {
+      // Update existing pending message
+      clearTimeout(pendingUserMessage.timer);
+      const updated = updateMessage(pendingUserMessage.id, content.trim());
+      if (updated) broadcast({ type: 'update', message: updated, partial: true });
+      pendingUserMessage.timer = setTimeout(clearPendingUser, 10000);
+      res.json({ messageId: pendingUserMessage.id });
+    } else {
+      // Create new pending message
+      const message = addMessage({
+        id: crypto.randomUUID(),
+        conversationId: 'default',
+        role: 'user',
+        type: 'message',
+        content: content.trim(),
+        createdAt: new Date().toISOString(),
+      });
+      broadcast({ type: 'message', message, partial: true });
+      pendingUserMessage = {
+        id: message.id,
+        timer: setTimeout(clearPendingUser, 10000),
+      };
+      res.json({ messageId: message.id });
+    }
+    return;
+  }
+
+  // Final commit
+  if (pendingUserMessage) {
+    clearTimeout(pendingUserMessage.timer);
+    const id = pendingUserMessage.id;
+    pendingUserMessage = null;
+    const updated = updateMessage(id, content.trim());
+    if (updated) {
+      broadcast({ type: 'update', message: updated });
+      notifyAgent('user_message', {
+        conversationId: updated.conversationId,
+        messageId: updated.id,
+        content: updated.content,
+      });
+      res.json({ messageId: updated.id });
+      return;
+    }
+  }
+
+  // No pending message — create fresh
+  const message = createMessage('user', content.trim());
+  notifyAgent('user_message', {
+    conversationId: message.conversationId,
+    messageId: message.id,
+    content: message.content,
+  });
+  res.json({ messageId: message.id });
+});
+
+	// POST /agent/send — Send a message as agent.
+	//   Request body:
+	//     role            string  — must be "agent"
+	//     conversationId  string? — target conversation (default: "default")
 	//     content         string  — message content (text or JSON for typed messages)
 	//     type            string? — message type: "thought", "tool_call", "tool_result" (omit for regular message)
 	//     name            string? — tool name (for tool_call/tool_result)
-	//     attachment      object? — file attachment (file must exist in CHAT_PUBLIC_DIR)
+	//     attachment      object? — file attachment, file must exist in CHAT_PUBLIC_DIR
 	//       filename      string  — filename in chat-public
 	//   Response:
 	//     messageId       string  — assigned message ID
-agentApp.post('/send', (req, res) => {
-  const { conversationId, content, type, name, attachment: attachmentInput } = req.body;
+agentApp.post('/agent/send', (req, res) => {
+  const { role, conversationId, content, type, name, attachment: attachmentInput } = req.body;
+  if (role !== 'agent') {
+    res.status(400).json({ error: 'role must be "agent"' });
+    return;
+  }
   if (!content || typeof content !== 'string' || !content.trim()) {
     res.status(400).json({ error: 'Content required' });
     return;
@@ -315,6 +392,17 @@ agentApp.get('/messages', (req, res) => {
     messages = messages.filter(m => m.content.toLowerCase().includes(term));
   }
   res.json(messages);
+});
+
+	// GET /stt-prompt — Last 2 messages (excluding tools/thoughts) for STT context.
+	//   Response: plain text, one message per line
+agentApp.get('/stt-prompt', (_req, res) => {
+  const recent = getMessages()
+    .filter(m => !m.type || m.type === 'message')
+    .slice(-2)
+    .map(m => m.content)
+    .join('\n');
+  res.type('text/plain').send(recent + '\n');
 });
 
 // ===================
@@ -990,11 +1078,6 @@ async function start() {
   const agentHost = requireEnv('AGENT_HOST');
   agentApp.listen(Number(agentPort), agentHost, () => {
     console.log(`Agent API running on ${agentHost}:${agentPort}`);
-  });
-
-  const slavePort = requireEnv('SLAVE_PORT');
-  slaveApp.listen(Number(slavePort), agentHost, () => {
-    console.log(`Slave API running on ${agentHost}:${slavePort}`);
   });
 
   const publicHost = requireEnv('PUBLIC_HOST');

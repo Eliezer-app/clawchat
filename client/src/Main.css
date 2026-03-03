@@ -757,6 +757,15 @@ body {
   border-bottom-right-radius: 4px;
 }
 
+.message.partial .bubble {
+  animation: partialPulse 1.5s ease-in-out infinite;
+}
+
+@keyframes partialPulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.6; }
+}
+
 .message.agent .bubble {
   background: #fff;
   color: #1a1a1a;

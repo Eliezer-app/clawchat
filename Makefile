@@ -155,9 +155,9 @@ prod-git-unlock:
 
 # Test push notification
 push-send-test:
-	@curl -X POST http://127.0.0.1:3100/send -H 'Content-Type: application/json' -d '{"content": "test push notification"}' && echo
+	@curl -X POST http://127.0.0.1:3100/agent/send -H 'Content-Type: application/json' -d '{"role": "agent", "content": "test push notification"}' && echo
 
 # Print API docs (extracted from source comments)
 api-docs:
 	@. .env 2>/dev/null; \
-	awk -v ap="$$AGENT_PORT" -v sp="$$SLAVE_PORT" -v pp="$$PUBLIC_PORT" 'BEGIN{app=""} /^agentApp\./{app="agent"} /^publicApp\./{app="public"} /^slaveApp\./{app="slave"} /^[[:space:]]*\/\/ (GET|POST|PUT|PATCH|DELETE) \//{p=1; a=app} p{if(/^[[:space:]]*\/\//){sub(/^[[:space:]]*\/\/ ?/,""); lines[a]=lines[a] $$0 "\n"}else{p=0}} END{print "=== Agent API (:" ap ", no auth) ==="; printf "%s", lines["agent"]; print ""; print "---"; print ""; print "=== Slave API (:" sp ", no auth) ==="; printf "%s", lines["slave"]; print ""; print "---"; print ""; print "=== Public API (:" pp ", auth required) ==="; printf "%s", lines["public"]}' server/src/index.ts server/src/slave.ts
+	awk -v ap="$$AGENT_PORT" -v pp="$$PUBLIC_PORT" 'BEGIN{app=""} /^agentApp\./{app="agent"} /^publicApp\./{app="public"} /^[[:space:]]*\/\/ (GET|POST|PUT|PATCH|DELETE) \//{p=1; a=app} p{if(/^[[:space:]]*\/\//){sub(/^[[:space:]]*\/\/ ?/,""); lines[a]=lines[a] $$0 "\n"}else{p=0}} END{print "=== Local API (:" ap ", no auth) ==="; printf "%s", lines["agent"]; print ""; print "---"; print ""; print "=== Public API (:" pp ", auth required) ==="; printf "%s", lines["public"]}' server/src/index.ts

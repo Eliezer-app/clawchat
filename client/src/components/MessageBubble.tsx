@@ -8,6 +8,7 @@ const WIDGET_IFRAME_RE = /<iframe\s+[^>]*?src="(\/widget\/[^"]+)"/;
 
 interface MessageBubbleProps {
   message: Message;
+  partial?: boolean;
   onDelete: (id: string) => void;
   onForget: (id: string) => void;
   onImageClick: (src: string, filename: string) => void;
@@ -70,7 +71,7 @@ export default function MessageBubble(props: MessageBubbleProps) {
   onCleanup(() => document.removeEventListener('click', onDocClick));
 
   return (
-    <div id={`msg-${msg.id}`} class={`message ${msg.role}`}>
+    <div id={`msg-${msg.id}`} class={`message ${msg.role}${props.partial ? ' partial' : ''}`}>
       <div class="bubble">
         <button class="delete-btn" onClick={() => props.onDelete(msg.id)}>×</button>
         <Show when={widgetSrc()}>

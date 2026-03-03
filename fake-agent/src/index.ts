@@ -37,7 +37,7 @@ async function processMessage(content: string, signal: AbortSignal) {
     await sleep(1500, signal);
   }
 
-  const body: Record<string, unknown> = { content: `Echo: ${content}` };
+  const body: Record<string, unknown> = { role: 'agent', content: `Echo: ${content}` };
 
   // attach:filename — send message with file attachment
   const attachMatch = content.match(/^attach:(.+)$/);
@@ -46,7 +46,7 @@ async function processMessage(content: string, signal: AbortSignal) {
     body.attachment = { filename: attachMatch[1] };
   }
 
-  await fetch(`${CHAT_URL}/send`, {
+  await fetch(`${CHAT_URL}/agent/send`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
