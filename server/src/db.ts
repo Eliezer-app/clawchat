@@ -20,7 +20,6 @@ function migrate(db: Database.Database) {
   db.exec(`
     CREATE TABLE IF NOT EXISTS messages (
       id TEXT PRIMARY KEY,
-      conversationId TEXT NOT NULL DEFAULT 'default',
       role TEXT NOT NULL,
       content TEXT NOT NULL,
       attachment TEXT,
@@ -32,12 +31,10 @@ function migrate(db: Database.Database) {
 
   db.exec(`
     CREATE TABLE IF NOT EXISTS app_state (
-      conversationId TEXT NOT NULL,
-      appId TEXT NOT NULL,
+      appId TEXT PRIMARY KEY,
       state TEXT NOT NULL,
       version INTEGER DEFAULT 1,
-      updatedAt TEXT NOT NULL,
-      PRIMARY KEY (conversationId, appId)
+      updatedAt TEXT NOT NULL
     )
   `);
 
@@ -85,7 +82,6 @@ function migrate(db: Database.Database) {
 
 interface DbMessage {
   id: string;
-  conversationId: string;
   role: 'user' | 'agent';
   type: MessageType;
   content: string;
@@ -142,10 +138,9 @@ export function getMessage(id: string): Message | null {
 }
 
 export function addMessage(message: Message): Message {
-  const stmt = db().prepare('INSERT INTO messages (id, conversationId, role, type, content, name, attachment, createdAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?)');
+  const stmt = db().prepare('INSERT INTO messages (id, role, type, content, name, attachment, createdAt) VALUES (?, ?, ?, ?, ?, ?, ?)');
   stmt.run(
     message.id,
-    message.conversationId,
     message.role,
     message.type,
     message.content,
@@ -187,7 +182,7 @@ export interface AppState {
 }
 
 export function getAppState(appId: string): AppState | null {
-  const row = db().prepare('SELECT * FROM app_state WHERE conversationId = ? AND appId = ?').get('default', appId) as {
+  const row = db().prepare('SELECT * FROM app_state WHERE appId = ?').get(appId) as {
     appId: string;
     state: string;
     version: number;
@@ -205,14 +200,14 @@ export function getAppState(appId: string): AppState | null {
 export function setAppState(appId: string, state: unknown, version: number = 1): AppState {
   const updatedAt = new Date().toISOString();
   const stmt = db().prepare(`
-    INSERT INTO app_state (conversationId, appId, state, version, updatedAt)
-    VALUES (?, ?, ?, ?, ?)
-    ON CONFLICT(conversationId, appId) DO UPDATE SET
+    INSERT INTO app_state (appId, state, version, updatedAt)
+    VALUES (?, ?, ?, ?)
+    ON CONFLICT(appId) DO UPDATE SET
       state = excluded.state,
       version = excluded.version,
       updatedAt = excluded.updatedAt
   `);
-  stmt.run('default', appId, JSON.stringify(state), version, updatedAt);
+  stmt.run(appId, JSON.stringify(state), version, updatedAt);
   return { appId, state, version, updatedAt };
 }
 

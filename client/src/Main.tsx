@@ -12,7 +12,6 @@ import { AuthChecking, AuthLocked } from './components/AuthScreens';
 import Toast from './components/Toast';
 import { useActivityTracking } from './hooks/useActivityTracking';
 import { initScrollTracking, scrollToBottom } from './scrollAnchor';
-import './Main.css';
 
 marked.use({ breaks: true, gfm: true });
 

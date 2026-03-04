@@ -113,10 +113,9 @@ setInterval(() => {
 }, 30000);
 
 // Helper to create and broadcast a message
-function createMessage(role: Message['role'], content: string, opts?: { conversationId?: string; attachment?: Attachment; type?: Message['type']; name?: string }): Message {
+function createMessage(role: Message['role'], content: string, opts?: { attachment?: Attachment; type?: Message['type']; name?: string }): Message {
   const message = addMessage({
     id: crypto.randomUUID(),
-    conversationId: opts?.conversationId || 'default',
     role,
     type: opts?.type || 'message',
     content: content.trim(),
@@ -154,6 +153,7 @@ initSubscribers(subscriberUrlsRaw && subscriberUrlsRaw !== 'none' ? subscriberUr
 	//     role     string  — must be "user"
 	//     content  string  — message text
 	//     partial  boolean? — true for streaming STT fragments (updated in place, 10s timeout)
+	//     media    string?  — input medium (e.g. "voice") — forwarded to agent
 	//   Response:
 	//     messageId  string  — assigned message ID
 let pendingUserMessage: { id: string; timer: ReturnType<typeof setTimeout> } | null = null;
@@ -168,7 +168,7 @@ function clearPendingUser() {
 }
 
 agentApp.post('/user/send', (req, res) => {
-  const { role, content, partial } = req.body;
+  const { role, content, partial, media } = req.body;
   if (role !== 'user') {
     res.status(400).json({ error: 'role must be "user"' });
     return;
@@ -190,7 +190,6 @@ agentApp.post('/user/send', (req, res) => {
       // Create new pending message
       const message = addMessage({
         id: crypto.randomUUID(),
-        conversationId: 'default',
         role: 'user',
         type: 'message',
         content: content.trim(),
@@ -215,9 +214,9 @@ agentApp.post('/user/send', (req, res) => {
     if (updated) {
       broadcast({ type: 'update', message: updated });
       notifyAgent('user_message', {
-        conversationId: updated.conversationId,
         messageId: updated.id,
         content: updated.content,
+        ...(media && { media }),
       });
       res.json({ messageId: updated.id });
       return;
@@ -227,9 +226,9 @@ agentApp.post('/user/send', (req, res) => {
   // No pending message — create fresh
   const message = createMessage('user', content.trim());
   notifyAgent('user_message', {
-    conversationId: message.conversationId,
     messageId: message.id,
     content: message.content,
+    ...(media && { media }),
   });
   res.json({ messageId: message.id });
 });
@@ -237,7 +236,6 @@ agentApp.post('/user/send', (req, res) => {
 	// POST /agent/send — Send a message as agent.
 	//   Request body:
 	//     role            string  — must be "agent"
-	//     conversationId  string? — target conversation (default: "default")
 	//     content         string  — message content (text or JSON for typed messages)
 	//     type            string? — message type: "thought", "tool_call", "tool_result" (omit for regular message)
 	//     name            string? — tool name (for tool_call/tool_result)
@@ -246,7 +244,7 @@ agentApp.post('/user/send', (req, res) => {
 	//   Response:
 	//     messageId       string  — assigned message ID
 agentApp.post('/agent/send', (req, res) => {
-  const { role, conversationId, content, type, name, attachment: attachmentInput } = req.body;
+  const { role, content, type, name, attachment: attachmentInput } = req.body;
   if (role !== 'agent') {
     res.status(400).json({ error: 'role must be "agent"' });
     return;
@@ -287,7 +285,7 @@ agentApp.post('/agent/send', (req, res) => {
   if (!type || type === 'message') {
     broadcast({ type: SSEEventType.AGENT_STATE, state: 'idle' });
   }
-  const message = createMessage('agent', content.trim(), { conversationId, type, name, attachment });
+  const message = createMessage('agent', content.trim(), { type, name, attachment });
   res.json({ messageId: message.id });
 });
 
@@ -319,7 +317,7 @@ agentApp.post('/scroll', (req, res) => {
 	//   Form fields:
 	//     file    file   — file to attach (optional)
 	//     content string — message text (optional, one of file/content required)
-	//   Response: { id, conversationId, role, content, attachment?, createdAt }
+	//   Response: { id, role, content, attachment?, createdAt }
 agentApp.post('/upload', upload.single('file'), (req, res) => {
   const file = req.file;
   const content = (req.body.content as string) || '';
@@ -355,7 +353,7 @@ agentApp.delete('/messages/:id', (req, res) => {
 	// PATCH /messages/:id — Update a message's content.
 	//   Request body:
 	//     content  string — new message text
-	//   Response: { id, conversationId, role, content, createdAt } or 404
+	//   Response: { id, role, content, createdAt } or 404
 agentApp.patch('/messages/:id', (req, res) => {
   const { id } = req.params;
   const existing = getMessage(id);
@@ -383,7 +381,7 @@ agentApp.get('/health', (req, res) => {
 });
 
 	// GET /messages?search= — List all messages, optionally filtered.
-	//   Message[] — id, conversationId, role, content, annotations, createdAt
+	//   Message[] — id, role, content, annotations, createdAt
 agentApp.get('/messages', (req, res) => {
   const search = req.query.search as string | undefined;
   let messages = getMessages();
@@ -803,7 +801,6 @@ publicApp.post('/api/messages', (req, res) => {
   }
   const message = createMessage('user', content.trim());
   notifyAgent('user_message', {
-    conversationId: message.conversationId,
     messageId: message.id,
     content: message.content,
   });
@@ -833,7 +830,6 @@ publicApp.post('/api/upload', upload.single('file'), (req, res) => {
 
   const message = createMessage('user', content, { attachment });
   notifyAgent('user_message', {
-    conversationId: message.conversationId,
     messageId: message.id,
     content: message.content,
     attachment: attachment ? { ...attachment, path: path.join(chatPublicDir, attachment.filename) } : undefined,
@@ -887,10 +883,7 @@ publicApp.delete('/api/messages/:id', (req, res) => {
   if (!message) { res.status(404).json({ error: 'Message not found' }); return; }
   deleteMessage(id);
   broadcast({ type: 'delete', id });
-  notifyAgent('message_deleted', {
-    conversationId: message.conversationId,
-    messageId: id,
-  });
+  notifyAgent('message_deleted', { messageId: id });
   res.status(204).end();
 });
 

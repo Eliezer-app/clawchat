@@ -1,7 +1,7 @@
 // Widget API paths and SSE event types - shared between client and server
 
 export const WidgetApi = {
-  appState: (conversationId: string, appId: string) => `/api/app-state/${conversationId}/${appId}`,
+  appState: (appId: string) => `/api/app-state/${appId}`,
   widgetLog: '/api/widget-log',
 } as const;
 

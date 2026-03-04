@@ -10,8 +10,7 @@ export function initSubscribers(urls: string[]) {
 /** Delivers agent messages to all subscribers */
 export function notifySubscribers(message: Message) {
   if (message.role !== 'agent' || message.type !== 'message') return;
-  const { conversationId, ...payload } = message;
-  const body = JSON.stringify(payload);
+  const body = JSON.stringify(message);
   for (const url of subscriberUrls) {
     fetch(url, {
       method: 'POST',
