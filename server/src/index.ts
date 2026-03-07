@@ -275,13 +275,19 @@ agentApp.post('/agent/send', async (req, res) => {
 
   // Panel actions — execute via PanelController, no message stored
   if (type === 'panel') {
-    if (panelController) {
-      try {
-        const actions: PanelAction[] = JSON.parse(content);
+    const actions: PanelAction[] = JSON.parse(content);
+    try {
+      if (!panelController) {
+        const pc = new PanelController();
+        await pc.connect();
+        await pc.showPanels(...actions);
+        pc.disconnect();
+      } else {
         await panelController.showPanels(...actions);
-      } catch (e) {
-        console.error('[Panels]', (e as Error).message);
       }
+    } catch (e) {
+      if (panelMode) throw e;
+      console.log('[Panels]', (e as Error).message);
     }
     res.json({ ok: true });
     return;
@@ -1098,14 +1104,16 @@ async function start() {
   initPush(requireEnv);
 
   // Initialize panel controller — launch Chrome if needed, connect via CDP
-  try {
-    await PanelController.ensureChrome();
-    panelController = new PanelController();
-    await panelController.connect();
-    console.log('[Panels] Connected to Chrome on CDP port 9224');
-  } catch (e) {
-    console.error('[Panels] Failed to connect to Chrome:', (e as Error).message);
-    panelController = null;
+  if (panelMode) {
+    try {
+      await PanelController.ensureChrome();
+      panelController = new PanelController();
+      await panelController.connect();
+      console.log('[Panels] Connected to Chrome on CDP port 9224');
+    } catch (e) {
+      console.error('[Panels] Failed to connect to Chrome:', (e as Error).message);
+      panelController = null;
+    }
   }
 
   // SPA catch-all - serve index.html with app name injected (must be last)
