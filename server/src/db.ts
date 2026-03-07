@@ -77,6 +77,13 @@ function migrate(db: Database.Database) {
     )
   `);
 
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS settings (
+      key TEXT PRIMARY KEY,
+      value TEXT NOT NULL
+    )
+  `);
+
   db.exec('CREATE INDEX IF NOT EXISTS idx_messages_createdAt ON messages(createdAt)');
 }
 
@@ -348,4 +355,18 @@ export function getAllPushSubscriptions(): PushSubscription[] {
 export function deletePushSubscription(endpoint: string): boolean {
   const result = db().prepare('DELETE FROM push_subscriptions WHERE endpoint = ?').run(endpoint);
   return result.changes > 0;
+}
+
+// ===================
+// Settings
+// ===================
+
+export function getSetting<T = unknown>(key: string): T | null {
+  const row = db().prepare('SELECT value FROM settings WHERE key = ?').get(key) as { value: string } | undefined;
+  return row ? JSON.parse(row.value) as T : null;
+}
+
+export function setSetting(key: string, value: unknown): void {
+  db().prepare('INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value')
+    .run(key, JSON.stringify(value));
 }

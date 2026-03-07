@@ -6,7 +6,7 @@ export interface Attachment {
   size: number;
 }
 
-export type MessageType = 'message' | 'thought' | 'tool_call' | 'tool_result';
+export type MessageType = 'message' | 'thought' | 'tool_call' | 'tool_result' | 'panel';
 
 export interface Message {
   id: string;

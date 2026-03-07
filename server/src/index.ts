@@ -11,6 +11,7 @@ import { initPush, getVapidPublicKey, sendPushToAll } from './push.js';
 import type { Message, Attachment } from '@clawchat/shared';
 import { SSEEventType } from '@clawchat/shared';
 import { initSubscribers, notifySubscribers } from './subscribers.js';
+import { PanelController, PanelAction } from './PanelController.js';
 
 function requireEnv(name: string): string {
   const value = process.env[name];
@@ -26,7 +27,10 @@ const agentUrl = requireEnv('AGENT_URL');
 const promptsDir = requireEnv('PROMPTS_DIR');
 const chatPublicDir = requireEnv('CHAT_PUBLIC_DIR');
 const appName = requireEnv('APP_NAME');
+const baseUrl = requireEnv('BASE_URL');
 const widgetServerUrl = process.env.WIDGET_SERVER_URL || '';
+const panelMode = process.env.PANEL_MODE === 'true';
+let panelController: PanelController | null = null;
 
 // ===================
 // Agent Notification
@@ -107,6 +111,24 @@ function broadcast(data: object) {
   sseClients.forEach(client => client.write(payload));
 }
 
+const WIDGET_IFRAME_RE = /<iframe\s+[^>]*?src="(\/widget\/[^"]+)"[^>]*>(?:\s*<\/iframe>)?/;
+
+function broadcastMessage(message: Message, partial?: boolean) {
+  const data: any = { type: 'message', message };
+  if (partial) data.partial = true;
+
+  if (panelMode && panelController) {
+    const actions: PanelAction[] = [{ action: 'show', slot: 'left', url: `${baseUrl}/display` }];
+    const match = message.content.match(WIDGET_IFRAME_RE);
+    if (match) {
+      actions.push({ action: 'show', slot: 'right', url: `${baseUrl}${match[1]}` });
+    }
+    panelController!.showPanels(...actions).catch(e => console.error('[Panels]', e));
+  }
+
+  broadcast(data);
+}
+
 // SSE heartbeat
 setInterval(() => {
   sseClients.forEach(client => client.write(': heartbeat\n\n'));
@@ -123,7 +145,7 @@ function createMessage(role: Message['role'], content: string, opts?: { attachme
     attachment: opts?.attachment,
     createdAt: new Date().toISOString(),
   });
-  broadcast({ type: 'message', message });
+  broadcastMessage(message);
   notifySubscribers(message);
 
   // Send push notification for regular agent messages only
@@ -237,18 +259,34 @@ agentApp.post('/user/send', (req, res) => {
 	//   Request body:
 	//     role            string  — must be "agent"
 	//     content         string  — message content (text or JSON for typed messages)
-	//     type            string? — message type: "thought", "tool_call", "tool_result" (omit for regular message)
+	//     type            string? — message type: "thought", "tool_call", "tool_result", "panel" (omit for regular message)
 	//     name            string? — tool name (for tool_call/tool_result)
 	//     attachment      object? — file attachment, file must exist in CHAT_PUBLIC_DIR
 	//       filename      string  — filename in chat-public
+	//   When type is "panel", content is a JSON array of PanelAction objects.
 	//   Response:
-	//     messageId       string  — assigned message ID
-agentApp.post('/agent/send', (req, res) => {
+	//     messageId       string  — assigned message ID (or { ok: true } for panel)
+agentApp.post('/agent/send', async (req, res) => {
   const { role, content, type, name, attachment: attachmentInput } = req.body;
   if (role !== 'agent') {
     res.status(400).json({ error: 'role must be "agent"' });
     return;
   }
+
+  // Panel actions — execute via PanelController, no message stored
+  if (type === 'panel') {
+    if (panelController) {
+      try {
+        const actions: PanelAction[] = JSON.parse(content);
+        await panelController.showPanels(...actions);
+      } catch (e) {
+        console.error('[Panels]', (e as Error).message);
+      }
+    }
+    res.json({ ok: true });
+    return;
+  }
+
   if (!content || typeof content !== 'string' || !content.trim()) {
     res.status(400).json({ error: 'Content required' });
     return;
@@ -1059,6 +1097,17 @@ async function start() {
   // Initialize push notifications
   initPush(requireEnv);
 
+  // Initialize panel controller — launch Chrome if needed, connect via CDP
+  try {
+    await PanelController.ensureChrome();
+    panelController = new PanelController();
+    await panelController.connect();
+    console.log('[Panels] Connected to Chrome on CDP port 9224');
+  } catch (e) {
+    console.error('[Panels] Failed to connect to Chrome:', (e as Error).message);
+    panelController = null;
+  }
+
   // SPA catch-all - serve index.html with app name injected (must be last)
   const indexHtml = fs.readFileSync(path.join(clientDist, 'index.html'), 'utf-8')
     .replace(/<title>[^<]*<\/title>/, `<title>${appName}</title>`)
@@ -1070,7 +1119,7 @@ async function start() {
 
   const agentHost = requireEnv('AGENT_HOST');
   agentApp.listen(Number(agentPort), agentHost, () => {
-    console.log(`Agent API running on ${agentHost}:${agentPort}`);
+    console.log(`Agent API running on ${agentHost}:${agentPort}${panelMode ? ' [panel mode]' : ''}`);
   });
 
   const publicHost = requireEnv('PUBLIC_HOST');

@@ -35,6 +35,8 @@ export default function Main() {
   const [loadingOlder, setLoadingOlder] = createSignal(false);
   const [partialMessageId, setPartialMessageId] = createSignal<string | null>(null);
 
+  const isDisplay = location.pathname === '/display';
+
   // Track user activity for push notification suppression
   useActivityTracking();
 
@@ -57,7 +59,7 @@ export default function Main() {
   createEffect(() => {
     messages();
     agentBusy();
-    if (ready) scrollToBottom();
+    if (ready) scrollToBottom(isDisplay);
   });
 
   let sse: EventSource | null = null;
@@ -128,7 +130,7 @@ export default function Main() {
     };
     events.onerror = () => {
       events.close();
-      setTimeout(connectSSE, 3000);
+      setTimeout(refreshMessages, 3000);
     };
   }
 
@@ -378,9 +380,11 @@ export default function Main() {
         const code = (match[2] || '').trim();
         parts.push(<CodeBlock lang={lang} code={code} />);
       } else if (match[3]) {
-        // Widget iframe — render as component
-        const src = match[3];
-        parts.push(<Widget src={src} messageId={messageId} />);
+        // Widget iframe — render as component (skip on display path)
+        if (!isDisplay) {
+          const src = match[3];
+          parts.push(<Widget src={src} messageId={messageId} />);
+        }
       }
       lastIndex = match.index + match[0].length;
     }
