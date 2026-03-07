@@ -40,6 +40,7 @@ export class PanelController {
   private panels: Record<Panel, PanelInfo | null> = { left: null, right: null, fullscreen: null };
   private screenW = 0;
   private screenH = 0;
+  private screenTop = 0;
   private splitRatio = 1 / 3;
 
   async connect(): Promise<void> {
@@ -99,10 +100,11 @@ export class PanelController {
 
   private boundsFor(panel: Panel): Bounds {
     const leftW = Math.round(this.screenW * this.splitRatio);
+    const top = this.screenTop;
     switch (panel) {
-      case 'left': return { left: 0, top: 0, width: leftW, height: this.screenH };
-      case 'right': return { left: leftW, top: 0, width: this.screenW - leftW, height: this.screenH };
-      case 'fullscreen': return { left: 0, top: 0, width: this.screenW, height: this.screenH };
+      case 'left': return { left: 0, top, width: leftW, height: this.screenH };
+      case 'right': return { left: leftW, top, width: this.screenW - leftW, height: this.screenH };
+      case 'fullscreen': return { left: 0, top, width: this.screenW, height: this.screenH };
     }
   }
 
@@ -152,11 +154,12 @@ export class PanelController {
   private async detectScreenFrom(targetId: string): Promise<void> {
     await this.withPageWs(targetId, async (pageWs) => {
       const result = await this.pageCmd(pageWs, 'Runtime.evaluate', {
-        expression: 'JSON.stringify({w: screen.width, h: screen.height})',
+        expression: 'JSON.stringify({w: screen.availWidth, h: screen.availHeight, top: screen.availTop})',
       });
-      const { w, h } = JSON.parse(result.result.value);
+      const { w, h, top } = JSON.parse(result.result.value);
       this.screenW = w;
       this.screenH = h;
+      this.screenTop = top;
     });
   }
 

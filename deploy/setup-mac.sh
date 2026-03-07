@@ -39,6 +39,7 @@ pnpm --filter @clawchat/server build
 # Env file
 if [ ! -f "$REPO_DIR/.env" ]; then
   cp "$REPO_DIR/.env.example" "$REPO_DIR/.env"
+  sed -i '' 's|^BASE_URL=.*|BASE_URL=http://localhost:3101|' "$REPO_DIR/.env"
   echo
   echo "Created .env from .env.example — edit it before starting:"
   echo "  $REPO_DIR/.env"

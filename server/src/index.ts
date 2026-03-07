@@ -1109,6 +1109,7 @@ async function start() {
       await PanelController.ensureChrome();
       panelController = new PanelController();
       await panelController.connect();
+      await panelController.showPanel('left', `${baseUrl}/display`);
       console.log('[Panels] Connected to Chrome on CDP port 9224');
     } catch (e) {
       console.error('[Panels] Failed to connect to Chrome:', (e as Error).message);
