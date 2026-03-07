@@ -197,7 +197,7 @@ export class PanelController {
 
     this.panels = { left: null, right: null, fullscreen: null };
     const saved = getSetting<Record<string, string>>('panels') || {};
-    const targetMap = new Map(pages.map((t: any) => [t.targetId, t]));
+    const targetMap = new Map<string, { targetId: string; url: string }>(pages.map((t: any) => [t.targetId, t]));
 
     for (const p of ['left', 'right', 'fullscreen'] as Panel[]) {
       const targetId = saved[p];
