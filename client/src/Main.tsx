@@ -75,7 +75,12 @@ export default function Main() {
         switch (data.type) {
           case SSEEventType.MESSAGE:
             setMessages(msgs => [...msgs, data.message]);
-            setPartialMessageId(data.partial ? data.message.id : null);
+            if (data.partial) {
+              setPartialContent(data.message.content);
+              setPartialMessageId(data.message.id);
+            } else {
+              setPartialMessageId(null);
+            }
             break;
           case SSEEventType.DELETE:
             setMessages(msgs => msgs.filter(m => m.id !== data.id));
