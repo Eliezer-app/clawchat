@@ -90,6 +90,7 @@ export default function Main() {
             if (data.partial) {
               setPartialContent(data.message.content);
               setPartialMessageId(data.message.id);
+              scrollToBottom();
             } else {
               setMessages(msgs => msgs.map(m => m.id === data.message.id ? data.message : m));
               if (partialMessageId() === data.message.id) setPartialMessageId(null);
