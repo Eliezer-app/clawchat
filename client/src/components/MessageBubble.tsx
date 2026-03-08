@@ -9,6 +9,7 @@ const WIDGET_IFRAME_RE = /<iframe\s+[^>]*?src="(\/widget\/[^"]+)"/;
 interface MessageBubbleProps {
   message: Message;
   partial?: boolean;
+  contentOverride?: string;
   onDelete: (id: string) => void;
   onForget: (id: string) => void;
   onImageClick: (src: string, filename: string) => void;
@@ -77,7 +78,7 @@ export default function MessageBubble(props: MessageBubbleProps) {
         <Show when={widgetSrc()}>
           <button class="open-widget-btn" onClick={handleOpenWidget} title="Open widget in new tab">⧉</button>
         </Show>
-        <Show when={msg.content}>{props.renderContent(msg.content, msg.id)}</Show>
+        <Show when={props.contentOverride || msg.content}>{props.renderContent(props.contentOverride || msg.content, msg.id)}</Show>
         <Show when={msg.attachment}>
           {(att) => (
             <Show

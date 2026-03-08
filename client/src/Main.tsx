@@ -34,6 +34,7 @@ export default function Main() {
   const [hasMore, setHasMore] = createSignal(false);
   const [loadingOlder, setLoadingOlder] = createSignal(false);
   const [partialMessageId, setPartialMessageId] = createSignal<string | null>(null);
+  const [partialContent, setPartialContent] = createSignal<string>('');
 
   const isDisplay = location.pathname === '/display';
 
@@ -81,9 +82,13 @@ export default function Main() {
             if (partialMessageId() === data.id) setPartialMessageId(null);
             break;
           case SSEEventType.UPDATE:
-            setMessages(msgs => msgs.map(m => m.id === data.message.id ? data.message : m));
-            if (data.partial) setPartialMessageId(data.message.id);
-            else if (partialMessageId() === data.message.id) setPartialMessageId(null);
+            if (data.partial) {
+              setPartialContent(data.message.content);
+              setPartialMessageId(data.message.id);
+            } else {
+              setMessages(msgs => msgs.map(m => m.id === data.message.id ? data.message : m));
+              if (partialMessageId() === data.message.id) setPartialMessageId(null);
+            }
             break;
           case SSEEventType.APP_STATE_UPDATED: {
             const ch = new BroadcastChannel(`app:${data.appId}`);
@@ -483,6 +488,7 @@ export default function Main() {
                       <MessageBubble
                         message={msg}
                         partial={msg.id === partialMessageId()}
+                        contentOverride={msg.id === partialMessageId() ? partialContent() : undefined}
                         onDelete={deleteMsg}
                         onForget={forgetFrom}
                         onImageClick={openLightbox}
