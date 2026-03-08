@@ -190,9 +190,14 @@ function clearPendingUser() {
 }
 
 agentApp.post('/user/send', (req, res) => {
-  const { role, content, partial, media } = req.body;
+  const { role, content, partial, media, cancel } = req.body;
   if (role !== 'user') {
     res.status(400).json({ error: 'role must be "user"' });
+    return;
+  }
+  if (cancel) {
+    clearPendingUser();
+    res.json({ ok: true });
     return;
   }
   if (!content || typeof content !== 'string' || !content.trim()) {

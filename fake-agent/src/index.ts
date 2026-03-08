@@ -34,7 +34,7 @@ async function processMessage(content: string, signal: AbortSignal) {
 
   for (const s of states) {
     setState(s);
-    await sleep(1500, signal);
+    await sleep(700, signal);
   }
 
   const body: Record<string, unknown> = { role: 'agent', content: `Echo: ${content}` };
