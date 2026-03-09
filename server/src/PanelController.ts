@@ -163,10 +163,14 @@ export class PanelController {
     });
   }
 
-  /** Un-maximize a window if needed, then set its bounds. */
+  /** Un-maximize a window if needed, then set its bounds. Skip fullscreen (macOS tiling). */
   private async setWindowBounds(windowId: number, bounds: Bounds): Promise<void> {
-    // CDP ignores bounds on maximized/fullscreen windows — normalize first
-    await this.cdp('Browser.setWindowBounds', { windowId, bounds: { windowState: 'normal' } });
+    const win = await this.cdp('Browser.getWindowBounds', { windowId });
+    if (win.bounds.windowState === 'fullscreen') return;
+    // CDP ignores bounds on maximized windows — normalize first
+    if (win.bounds.windowState === 'maximized') {
+      await this.cdp('Browser.setWindowBounds', { windowId, bounds: { windowState: 'normal' } });
+    }
     await this.cdp('Browser.setWindowBounds', { windowId, bounds });
   }
 
